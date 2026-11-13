@@ -1,0 +1,69 @@
+#pragma once
+
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <atomic>
+#include <vector>
+
+/** Passes audio through untouched and taps it for analysis (spectrum + levels). */
+class MixMentorProcessor : public juce::AudioProcessor
+{
+public:
+    MixMentorProcessor();
+    ~MixMentorProcessor() override = default;
+
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override {}
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    using AudioProcessor::processBlock;
+
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override { return true; }
+
+    const juce::String getName() const override { return JucePlugin_Name; }
+    bool acceptsMidi() const override  { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
+
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return {}; }
+    void changeProgramName (int, const juce::String&) override {}
+
+    void getStateInformation (juce::MemoryBlock& destData) override;
+    void setStateInformation (const void* data, int sizeInBytes) override;
+
+    void updateTrackProperties (const TrackProperties& properties) override;
+
+    //==============================================================================
+    // Shared with the editor
+
+    /** GUI thread: pulls up to maxSamples of the latest mono audio. Returns how many were read. */
+    int readAnalysisSamples (float* dest, int maxSamples);
+
+    /** GUI thread: highest peak (linear) since the last call, then resets it. */
+    float takePeak() { return peakSinceLastRead.exchange (0.0f); }
+    float getLatestRms() const { return latestRms.load(); }
+    double getCurrentSampleRate() const { return currentSampleRate.load(); }
+
+    juce::String getTrackName() const;
+
+    std::atomic<int>  genreIndex { -1 };              // -1 = user hasn't picked a genre yet
+    std::atomic<int>  instrumentIndex { 0 };
+    std::atomic<bool> instrumentChosenByUser { false };
+
+private:
+    static constexpr int fifoSize = 1 << 15;
+    juce::AbstractFifo fifo { fifoSize };
+    std::vector<float> fifoBuffer = std::vector<float> ((size_t) fifoSize, 0.0f);
+
+    std::atomic<float> peakSinceLastRead { 0.0f }, latestRms { 0.0f };
+    std::atomic<double> currentSampleRate { 44100.0 };
+
+    mutable juce::CriticalSection trackNameLock;
+    juce::String trackName;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MixMentorProcessor)
+};

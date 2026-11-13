@@ -1,0 +1,241 @@
+{
+  "processes": [
+    { "id": "eq",          "name": "EQ" },
+    { "id": "compression", "name": "Compression" },
+    { "id": "sidechain",   "name": "Sidechain" },
+    { "id": "reverb",      "name": "Reverb" },
+    { "id": "delay",       "name": "Delay" },
+    { "id": "gain",        "name": "Gain Staging" }
+  ],
+
+  "instruments": [
+    { "id": "kick",  "name": "Kick",           "keywords": ["kick", "kik", "bd", "bassdrum"] },
+    { "id": "snare", "name": "Snare / Clap",   "keywords": ["snare", "snr", "clap", "sd"] },
+    { "id": "bass",  "name": "Bass / 808",     "keywords": ["bass", "808", "sub"] },
+    { "id": "vocal", "name": "Lead Vocal",     "keywords": ["vocal", "vox", "voc"] }
+  ],
+
+  "genres": [
+    {
+      "id": "hiphop",
+      "name": "Hip-Hop / Trap",
+      "summary": "Low end leads: the kick and 808 dominate, the vocal sits loud and upfront, and the mix is punchy and fairly dry.",
+      "guides": {
+        "kick": {
+          "peakRange": [-12, -6],
+          "zones": [
+            { "lo": 45,   "hi": 70,   "kind": "boost", "label": "Thump",       "tip": "The kick's weight. In trap the 808 often owns the deep sub, so keep the kick's energy here and let the 808 sit around or below it." },
+            { "lo": 200,  "hi": 400,  "kind": "cut",   "label": "Boxiness",    "tip": "Cardboard / boxy zone. A narrow 2-4 dB cut here usually cleans the kick up." },
+            { "lo": 3000, "hi": 6000, "kind": "boost", "label": "Click",       "tip": "Beater attack. This is what makes the kick audible on phone speakers. Boost a little if it disappears next to the 808." }
+          ],
+          "tips": {
+            "eq": "High-pass around 25-30 Hz to remove rumble you can't hear.\n\nDecide who owns the sub. If your 808 is long and heavy, keep the kick's energy at 50-80 Hz and its click at 3-5 kHz.\n\nIf it sounds like cardboard, cut 250-400 Hz. Trick: sweep a narrow boost slowly until it sounds ugly, then turn that boost into a cut.",
+            "compression": "Often not needed: trap kicks are usually already-processed samples.\n\nIf it needs more punch: slow-ish attack (10-30 ms) so the transient gets through, fast release (50-100 ms), 2-4 dB of gain reduction.\n\nA clipper or saturation is common for making the kick louder without losing punch.",
+            "sidechain": "Sidechain the 808 to the kick so they don't clash: fast attack, 50-120 ms release, 2-6 dB of ducking.\n\nAlternatives: program the 808 so it doesn't hit at the same moment as the kick, or tune the kick to the song's key.",
+            "reverb": "Usually none. Keep the kick dry and centred.\n\nIf you want space, use a very short room on a send and high-pass the reverb return above ~300 Hz so it doesn't muddy the low end.",
+            "delay": "Rarely used on the kick. A delay throw on a single kick hit can work as a transition effect. Automate the send so it's only on that hit.",
+            "gain": "Aim for peaks around -12 to -6 dBFS on this track before bus processing.\n\nKick and 808 are usually the loudest elements: balance them first, then build everything else around them."
+          }
+        },
+        "snare": {
+          "peakRange": [-14, -8],
+          "zones": [
+            { "lo": 150,  "hi": 250,   "kind": "watch", "label": "Body",   "tip": "Weight of the snare/clap. Boost slightly if it's thin, cut if it's boxy." },
+            { "lo": 2000, "hi": 5000,  "kind": "boost", "label": "Crack",  "tip": "Snap and crack. Trap claps are often bright already, so tame 3-4 kHz if it's piercing." },
+            { "lo": 8000, "hi": 12000, "kind": "watch", "label": "Sizzle", "tip": "Air and sizzle. A gentle high shelf adds shine; too much gets brittle." }
+          ],
+          "tips": {
+            "eq": "High-pass at 100-150 Hz, because the kick and 808 own the low end.\n\nFind the body at 180-250 Hz and the crack at 2-5 kHz. Trap snares and claps are usually bright; if one pierces your ears, cut narrowly around 3-4 kHz.",
+            "compression": "Fast attack softens the hit; slow attack (10-30 ms) emphasises the snap. 3-5 dB of reduction.\n\nParallel compression (blend in a heavily squashed copy) adds density without killing the transient.",
+            "sidechain": "Not usually needed. Sometimes ducking a dense loop or pad with the snare helps it punch through.",
+            "reverb": "A short plate or room on a send: 0.8-1.5 s decay, 10-30 ms pre-delay. Keep it subtle in trap; boom-bap can take more room character.\n\nHigh-pass the reverb return around 300-500 Hz.",
+            "delay": "Delay throws (1/8 or 1/4) on the last snare of a phrase. Filter the delay so it doesn't fight the vocal.",
+            "gain": "Peaks roughly -14 to -8 dBFS. The snare should be clearly heard but usually sits a touch under the kick."
+          }
+        },
+        "bass": {
+          "peakRange": [-10, -4],
+          "zones": [
+            { "lo": 30,  "hi": 60,   "kind": "watch", "label": "Sub",            "tip": "The 808's fundamental. Felt more than heard. Check it on headphones or a sub: laptop speakers can't play it." },
+            { "lo": 150, "hi": 300,  "kind": "cut",   "label": "Mud / overlap",  "tip": "Where the 808 overlaps the kick and other instruments. A small dip here tightens the low end." },
+            { "lo": 700, "hi": 1500, "kind": "boost", "label": "Harmonics",      "tip": "Makes the 808 audible on phones and earbuds. Create these with saturation/distortion rather than EQ boosts." }
+          ],
+          "tips": {
+            "eq": "High-pass around 25-30 Hz.\n\nMake sure the 808 is tuned to the song's key. That matters more than EQ.\n\nIf it disappears on small speakers, add saturation to create harmonics instead of boosting the sub. Clean up overlap with the kick by dipping where the kick's thump lives, or use sidechain.",
+            "compression": "808 samples are usually consistent already. Use light compression or a limiter/clipper to control peaks when notes vary in level.\n\nAvoid very fast release on low frequencies (keep it above ~50 ms), or it will distort.",
+            "sidechain": "Key move: sidechain the 808 to the kick with 2-6 dB of reduction and a short release so the kick punches through.\n\nOr arrange the pattern so kick and 808 don't overlap.",
+            "reverb": "None. Reverb on sub frequencies creates mud. Keep the 808 mono and dry.",
+            "delay": "None on the sub. A filtered delay on a high-passed, saturated duplicate can add movement in a breakdown.",
+            "gain": "The 808 is often the loudest reading in the whole mix: peaks around -10 to -4 dBFS on the track.\n\nWatch that it doesn't eat all your master headroom. Leave ~6 dB on the master bus."
+          }
+        },
+        "vocal": {
+          "peakRange": [-12, -6],
+          "zones": [
+            { "lo": 20,    "hi": 120,   "kind": "cut",   "label": "Rumble",     "tip": "Handling noise, plosives and room rumble. High-pass up to ~100-120 Hz for rap vocals." },
+            { "lo": 200,   "hi": 400,   "kind": "cut",   "label": "Mud",        "tip": "Muffled, boxy sound. Cut a few dB if the vocal sounds like it's in a cupboard." },
+            { "lo": 2000,  "hi": 5000,  "kind": "boost", "label": "Presence",   "tip": "Clarity and intelligibility. A gentle broad boost helps every word come through." },
+            { "lo": 5000,  "hi": 9000,  "kind": "watch", "label": "Sibilance", "tip": "Harsh S and T sounds live here. Use a de-esser instead of a static EQ cut." },
+            { "lo": 10000, "hi": 16000, "kind": "boost", "label": "Air",        "tip": "Expensive-sounding sheen. A high shelf boost, added before the de-esser catches the extra S's." }
+          ],
+          "tips": {
+            "eq": "High-pass at 80-120 Hz (higher for rap than singing). Cut mud at 200-400 Hz if it sounds muffled.\n\nRap vocals need clarity: a gentle boost at 3-5 kHz for presence and a high shelf above 10 kHz for air.\n\nTame harsh S's with a de-esser (5-9 kHz) rather than EQ.",
+            "compression": "Rap vocals are compressed hard so every word is audible.\n\nCommon setup, two stages:\n1) A fast compressor (1176-style, 4:1, fast attack) catching peaks: 3-5 dB of reduction.\n2) A smoother one (LA-2A-style) for 2-3 dB more.\n\n6-10 dB total is normal in hip-hop.",
+            "sidechain": "Optional: duck the beat by 1-3 dB when the vocal plays.\n\nMore transparent trick: a dynamic EQ dip at 2-4 kHz on the beat, triggered by the vocal.",
+            "reverb": "Modern hip-hop vocals are dry and in-your-face. Use a short plate or room at low level, or reverb only on ad-libs and line endings.\n\nHigh-pass the return at 300-500 Hz and low-pass it at 8-10 kHz.",
+            "delay": "1/4 or 1/8 note delay throws on the last word of a line are a classic.\n\nPut the delay on a send, filter it, and automate the send so only the words you choose echo.",
+            "gain": "Record the vocal peaking around -12 to -6 dBFS into your chain.\n\nIn the mix the vocal should be the loudest mid-range element, on top of the beat."
+          }
+        }
+      }
+    },
+
+    {
+      "id": "pop",
+      "name": "Pop",
+      "summary": "The vocal is king: everything supports a polished, bright, upfront lead vocal. The low end is controlled and balanced.",
+      "guides": {
+        "kick": {
+          "peakRange": [-12, -8],
+          "zones": [
+            { "lo": 50,   "hi": 80,   "kind": "boost", "label": "Thump",    "tip": "Body of the kick. Boost moderately; pop needs a tight kick, not a huge sub." },
+            { "lo": 250,  "hi": 400,  "kind": "cut",   "label": "Boxiness", "tip": "Cardboard zone. Cut a few dB to clean up room for the bass and vocal." },
+            { "lo": 2500, "hi": 5000, "kind": "boost", "label": "Click",    "tip": "Attack. A small boost keeps the kick audible in dense arrangements." }
+          ],
+          "tips": {
+            "eq": "High-pass around 30 Hz.\n\nPop kicks are tight and controlled: moderate boost at 50-80 Hz, cut boxiness around 300 Hz, and a little click at 3-5 kHz so it's heard under a busy arrangement.\n\nAvoid huge sub boosts and leave room for the bass.",
+            "compression": "4:1 ratio, attack 10-30 ms, release ~80 ms, 3-5 dB of reduction for punch.\n\nMany pop mixes also send the drums to a parallel 'smash' bus for extra energy.",
+            "sidechain": "Lightly sidechain the bass to the kick (1-3 dB) to keep the low end clean.\n\nDance-pop uses more obvious pumping on synths and pads.",
+            "reverb": "Little or none directly on the kick. A shared drum-room reverb on a send (high-passed) adds space to the whole kit.",
+            "delay": "Not typical on the kick.",
+            "gain": "Peaks around -12 to -8 dBFS. Balance kick and bass first, then bring the vocal up so it sits clearly on top."
+          }
+        },
+        "snare": {
+          "peakRange": [-14, -8],
+          "zones": [
+            { "lo": 150,  "hi": 250,  "kind": "watch", "label": "Body",     "tip": "Weight of the snare. Boost if thin." },
+            { "lo": 400,  "hi": 800,  "kind": "cut",   "label": "Boxiness", "tip": "Honky, boxy tone. A cut here makes the snare sound more expensive." },
+            { "lo": 3000, "hi": 6000, "kind": "boost", "label": "Crack",    "tip": "Snap. Be careful: this range overlaps the vocal's presence zone." }
+          ],
+          "tips": {
+            "eq": "High-pass at 80-100 Hz.\n\nBody at 150-250 Hz, cut boxiness around 500 Hz, add crack at 3-6 kHz and a high shelf for air if needed.\n\nPop snares are bright, but they shouldn't compete with the vocal's 2-5 kHz presence.",
+            "compression": "4:1, medium attack (5-20 ms), 3-5 dB of reduction.\n\nParallel compression adds thickness without losing the hit.",
+            "sidechain": "Not usually needed.",
+            "reverb": "Plate reverb is the classic pop snare sound: 1-2 s decay, 20-40 ms pre-delay.\n\nGated or huge reverbs for retro/80s pop. Automate more reverb in the chorus for a sense of size.",
+            "delay": "Occasional slapback or tempo delays as an effect only.",
+            "gain": "Peaks around -14 to -8 dBFS."
+          }
+        },
+        "bass": {
+          "peakRange": [-12, -8],
+          "zones": [
+            { "lo": 40,  "hi": 80,   "kind": "watch", "label": "Fundamental", "tip": "Weight of the bass notes. Should feel solid but not boomy." },
+            { "lo": 200, "hi": 300,  "kind": "cut",   "label": "Mud",         "tip": "Low-mid build-up. Cut here if the mix feels cloudy." },
+            { "lo": 700, "hi": 1500, "kind": "boost", "label": "Definition",  "tip": "Note definition, so the bass line is heard on small speakers. Boost or saturate." }
+          ],
+          "tips": {
+            "eq": "High-pass around 30 Hz.\n\nPop bass must be heard on small speakers: boost 700 Hz-1.5 kHz for note definition, or use gentle saturation.\n\nCut mud around 200-300 Hz and leave space for the kick at its thump frequency.",
+            "compression": "Pop bass is very even: 4:1, medium attack, 4-6 dB of reduction.\n\nTwo compressors in series (each doing a little) give smooth, natural control.",
+            "sidechain": "Sidechain to the kick for 1-3 dB of ducking to keep the low end tight.",
+            "reverb": "Keep the bass dry, and mono below ~150 Hz.",
+            "delay": "Not used.",
+            "gain": "Peaks around -12 to -8 dBFS."
+          }
+        },
+        "vocal": {
+          "peakRange": [-12, -6],
+          "zones": [
+            { "lo": 20,    "hi": 100,   "kind": "cut",   "label": "Rumble",    "tip": "High-pass up to 80-100 Hz to remove rumble and plosive thumps." },
+            { "lo": 200,   "hi": 400,   "kind": "cut",   "label": "Mud",       "tip": "Muffled zone. Cut if the vocal lacks clarity." },
+            { "lo": 2000,  "hi": 5000,  "kind": "boost", "label": "Presence",  "tip": "Pop vocals are bright and forward. A broad, gentle boost here." },
+            { "lo": 5000,  "hi": 9000,  "kind": "watch", "label": "Sibilance", "tip": "Harsh S's. Always de-ess after brightening." },
+            { "lo": 10000, "hi": 16000, "kind": "boost", "label": "Air",       "tip": "Glossy sheen. A high shelf of a few dB is common in pop." }
+          ],
+          "tips": {
+            "eq": "High-pass at 80-100 Hz. Cut mud at 200-400 Hz.\n\nPop vocals are bright and glossy: a broad presence boost at 2-5 kHz and an air shelf from 10-12 kHz up.\n\nAlways de-ess after brightening. Cut harsh resonances narrowly rather than boosting more.",
+            "compression": "Heavy but smooth: often two compressors (a fast peak catcher plus a smooth leveller) for 6-10 dB in total.\n\nAdd volume automation so every word is equally loud. A pop vocal should feel glued to the front.",
+            "sidechain": "Common trick: sidechain the reverb and delay returns to the dry vocal, so the effects bloom only in the gaps.\n\nAlso a gentle dynamic-EQ dip in the music at 2-4 kHz while the vocal sings.",
+            "reverb": "Plate or hall on a send: 1.5-2.5 s decay, 50-100 ms pre-delay so the words stay clear.\n\nEQ the return (high-pass 300 Hz, low-pass 8 kHz). Use more reverb in choruses and bridges.",
+            "delay": "1/4 or dotted-1/8 delays tucked under the vocal, filtered.\n\nSlapback (60-120 ms) for a retro feel. Duck the delay under the vocal (see Sidechain).",
+            "gain": "Record peaking around -12 to -6 dBFS.\n\nIn the mix the lead vocal is the loudest mid-range element."
+          }
+        }
+      }
+    },
+
+    {
+      "id": "house",
+      "name": "House / EDM",
+      "summary": "The kick drives everything: four-on-the-floor, a big clean low end, sidechain pumping, and wide, wet synths and vocals.",
+      "guides": {
+        "kick": {
+          "peakRange": [-8, -5],
+          "zones": [
+            { "lo": 45,   "hi": 70,   "kind": "boost", "label": "Sub thump", "tip": "The kick's fundamental, the engine of the track. Keep it clean; carve the bass around it." },
+            { "lo": 250,  "hi": 500,  "kind": "cut",   "label": "Boxiness",  "tip": "Mud zone. Cutting here gives a tighter, more club-ready kick." },
+            { "lo": 2000, "hi": 5000, "kind": "boost", "label": "Punch",     "tip": "Click and punch that cut through the synths." }
+          ],
+          "tips": {
+            "eq": "High-pass at 20-30 Hz.\n\nIn house the kick is the loudest, most important element. Make sure its fundamental (usually 45-70 Hz) is clean. Cut boxiness at 250-500 Hz.\n\nCarve the bass around the kick, not the other way round.",
+            "compression": "Kick samples are usually ready to use. For loudness, reach for saturation or a clipper rather than heavy compression.\n\nIf you do compress: slow attack (20-30 ms) to keep the punch.",
+            "sidechain": "The kick is the sidechain source for almost everything: bass (deep ducking, 6-12 dB), pads, synths, even reverb returns. That pumping groove is part of the genre.\n\nUse a muted 'ghost kick' track or a volume-shaper plugin for consistent pumping.",
+            "reverb": "Kick stays dry and mono. Reverb on the kick muddies the groove.",
+            "delay": "None.",
+            "gain": "The kick is your reference: peaks around -8 to -5 dBFS. Build everything else relative to it."
+          }
+        },
+        "snare": {
+          "peakRange": [-14, -10],
+          "zones": [
+            { "lo": 150,  "hi": 300,   "kind": "cut",   "label": "Low body", "tip": "Usually high-passed away in house so the clap doesn't fight the kick and bass." },
+            { "lo": 1000, "hi": 3000,  "kind": "boost", "label": "Clap",     "tip": "Where a clap's character lives." },
+            { "lo": 8000, "hi": 12000, "kind": "boost", "label": "Air",      "tip": "Shine. A high shelf makes claps sparkle on big systems." }
+          ],
+          "tips": {
+            "eq": "High-pass at 150-200 Hz so it doesn't fight the kick and bass.\n\nClaps live around 1-3 kHz; add air above 8 kHz for shine.\n\nLayered claps: EQ each layer into a different range.",
+            "compression": "Light. Transient shapers are often more useful than compressors for claps.",
+            "sidechain": "Not usually ducked: it lands on beats 2 and 4, between the kicks.",
+            "reverb": "Claps love reverb in house: short to medium plate or room, 0.8-1.5 s, high-passed.\n\nBig reverb tails for breakdowns and builds.",
+            "delay": "1/8 or 1/16 delays on claps add groove. Filter them heavily.",
+            "gain": "Peaks around -14 to -10 dBFS, under the kick."
+          }
+        },
+        "bass": {
+          "peakRange": [-10, -6],
+          "zones": [
+            { "lo": 40,  "hi": 100,  "kind": "watch", "label": "Sub (mono)",   "tip": "Keep it mono. If it clashes with the kick's fundamental, sidechain or dip it." },
+            { "lo": 100, "hi": 250,  "kind": "cut",   "label": "Kick clash",   "tip": "Mid-bass build-up that blurs the kick. Clean it out." },
+            { "lo": 800, "hi": 2000, "kind": "boost", "label": "Character",    "tip": "Growl and character, so the bass is heard in clubs and on phones. Saturation works well here." }
+          ],
+          "tips": {
+            "eq": "High-pass around 30 Hz. Keep everything below ~120 Hz mono.\n\nCut the bass where the kick's fundamental sits if they clash.\n\nFor synth basses, add character at 800 Hz-2 kHz with saturation so the bass is heard on every system.",
+            "compression": "Synth basses are usually stable. Use light compression or limiting for consistency.",
+            "sidechain": "Essential: deep sidechain (6-12 dB) from the kick, attack ~0-5 ms, release timed to the tempo so the bass swells back between kicks.",
+            "reverb": "No reverb on the sub. A small amount on filtered mid/high bass layers is fine.",
+            "delay": "Not on the sub. A short, filtered delay on mid-range bass layers can add movement.",
+            "gain": "Peaks around -10 to -6 dBFS.\n\nKick and bass together should still leave about 6 dB of headroom on your master."
+          }
+        },
+        "vocal": {
+          "peakRange": [-12, -6],
+          "zones": [
+            { "lo": 20,    "hi": 150,   "kind": "cut",   "label": "Low cut",   "tip": "High-pass harder than in pop (120-200 Hz). The kick and bass need the space." },
+            { "lo": 200,   "hi": 400,   "kind": "cut",   "label": "Mud",       "tip": "Cut if the vocal blurs into the synths." },
+            { "lo": 2000,  "hi": 5000,  "kind": "boost", "label": "Presence",  "tip": "Helps the vocal cut through a dense, wide mix." },
+            { "lo": 5000,  "hi": 9000,  "kind": "watch", "label": "Sibilance", "tip": "De-ess, especially before big reverbs, or S's will splash." },
+            { "lo": 10000, "hi": 16000, "kind": "boost", "label": "Air",       "tip": "Bright, airy vocals suit dance music." }
+          ],
+          "tips": {
+            "eq": "High-pass more aggressively than in pop (120-200 Hz): the kick and bass need that space.\n\nBoost presence at 2-5 kHz and air from 10 kHz up. Thin, bright vocals cut through a dense dance mix.",
+            "compression": "Heavy compression for consistency (6-10 dB).\n\nVocal chops are often limited hard and treated like an instrument.",
+            "sidechain": "Light ducking from the kick (1-3 dB) can make the vocal pump with the track.\n\nSidechain the reverb and delay returns to the vocal so the words stay clear.",
+            "reverb": "Big and wide: halls or plates, 2-4 s, 50-100 ms pre-delay. Lush reverb is part of the genre, especially in breakdowns.\n\nDe-ess before the reverb.",
+            "delay": "Tempo-synced 1/4, dotted-1/8 or ping-pong delays are standard.\n\nFilter the returns and duck them under the dry vocal.",
+            "gain": "Peaks around -12 to -6 dBFS."
+          }
+        }
+      }
+    }
+  ]
+}

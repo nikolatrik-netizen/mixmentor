@@ -1,0 +1,41 @@
+# Builds Windows (VST3) and macOS (VST3 + AU) versions on GitHub's servers.
+# Push this project to a GitHub repo, open the "Actions" tab, and download the
+# finished plugins from the run's "Artifacts" section.
+name: Build plugin
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            configure: ""
+            targets: MixMentor_VST3
+          - os: macos-latest
+            configure: -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+            targets: MixMentor_VST3 MixMentor_AU
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        shell: bash
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.configure }}
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release --parallel 4 --target ${{ matrix.targets }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MixMentor-${{ runner.os }}
+          path: |
+            build/MixMentor_artefacts/Release/VST3
+            build/MixMentor_artefacts/Release/AU
+          if-no-files-found: warn
