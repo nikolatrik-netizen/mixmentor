@@ -29,14 +29,14 @@ juce_add_plugin(MixMentor
     COPY_PLUGIN_AFTER_BUILD     FALSE)
 
 # The genre knowledge base is compiled into the plugin.
-juce_add_binary_data(MixMentorData SOURCES Resources/knowledge.json)
+juce_add_binary_data(MixMentorData SOURCES knowledge.json)
 
 target_sources(MixMentor PRIVATE
-    Source/KnowledgeBase.cpp
-    Source/PluginProcessor.cpp
-    Source/PluginEditor.cpp
-    Source/SpectrumView.cpp
-    Source/LevelMeter.cpp)
+    KnowledgeBase.cpp
+    PluginProcessor.cpp
+    PluginEditor.cpp
+    SpectrumView.cpp
+    LevelMeter.cpp)
 
 target_compile_definitions(MixMentor PUBLIC
     JUCE_WEB_BROWSER=0
