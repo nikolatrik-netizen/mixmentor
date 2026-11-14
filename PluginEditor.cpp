@@ -716,6 +716,16 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
     workflowView.setScrollBarThickness (8);
     addChildComponent (workflowView);
 
+    modeTabs.setOptions ({ "mix", "melody" });
+    modeTabs.setSelected (0);
+    modeTabs.onChange = [this] (int index)
+    {
+        melodyPanel.setVisible (index == 1);
+        if (index != 1) processor.melody.setPreviewPlaying (false);
+    };
+    addAndMakeVisible (modeTabs);
+    addChildComponent (melodyPanel);
+
     picker.onPick = [this] (int g)
     {
         processor.genreIndex = g;
@@ -735,6 +745,7 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
 MixMentorEditor::~MixMentorEditor()
 {
     stopTimer();
+    processor.melody.setPreviewPlaying (false);
     setLookAndFeel (nullptr);
 }
 
@@ -780,7 +791,7 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.fillEllipse (s.getX() + 64.0f + wordW + 5.0f, 44.0f, 6.0f, 6.0f);
     g.setColour (col::textFaint);
     g.setFont (font (11.0f));
-    g.drawText ("learn while you mix   v0.6", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
+    g.drawText ("learn while you mix   v0.8", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
 
     g.setColour (col::border.withAlpha (0.6f));
     g.fillRect (s.getX(), 94.0f, s.getWidth(), 1.0f);
@@ -843,7 +854,7 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.drawText (genreName.toLowerCase(), tb.removeFromLeft (180.0f), juce::Justification::centredLeft, true);
     g.setColour (col::textDim);
     g.setFont (font (12.5f));
-    g.drawText (summaryText.toLowerCase(), tb.withTrimmedRight (150.0f), juce::Justification::centredLeft, true);
+    g.drawText (summaryText.toLowerCase(), tb.withTrimmedRight (240.0f), juce::Justification::centredLeft, true);
 
     // Guide panel
     drawPanel (g, guidePanel.toFloat());
@@ -896,7 +907,10 @@ void MixMentorEditor::resized()
     {
         auto tb = topBar.reduced (8, 5);
         guideButton.setBounds (tb.removeFromRight (30));
+        tb.removeFromRight (10);
+        modeTabs.setBounds (tb.removeFromRight (180));
     }
+    melodyPanel.setBounds (area);
 
     auto upper = area.removeFromTop ((int) (area.getHeight() * 0.55f));
     fixPanel.setBounds (upper.removeFromRight (330));
@@ -942,6 +956,9 @@ void MixMentorEditor::refreshContent()
     const bool wf = isWorkflowTab();
     tipText.setVisible (! wf);
     workflowView.setVisible (wf);
+
+    if (validGenre)
+        melodyPanel.setGenre (kb.genres()[(size_t) g].id);
 
     const auto* guide = kb.findGuide (g, i);
     if (guide == nullptr)
@@ -1061,6 +1078,7 @@ void MixMentorEditor::buildFixList()
             // An EQ bell only partly covers a zone, so suggest a bit more than the measured bump.
             is.amount = juce::jlimit (2.0f, 6.0f, std::round (is.bump ? dev + 1.0f : dev * 0.8f));
             is.baseline = is.bump ? r.bumpDb : r.relativeDb;
+            is.baselineLevel = r.isolatedDb;
             found.push_back ({ dev, is });
             flagged = true;
         }
@@ -1076,6 +1094,7 @@ void MixMentorEditor::buildFixList()
             is.action = 1;
             is.amount = r.resonanceDb >= 16.0f ? 5.0f : 3.0f;
             is.baseline = r.resonanceDb;
+            is.baselineLevel = r.isolatedDb;
             found.push_back ({ r.resonanceDb - 8.0f, is });
             flagged = true;
         }
@@ -1099,6 +1118,7 @@ void MixMentorEditor::recheckFixList()
     if (zones.size() != readings.size())
         return;
 
+    bool heard = false;
     for (auto& is : fs.issues)
     {
         if (is.status == 1 || ! juce::isPositiveAndBelow (is.zone, (int) readings.size()))
@@ -1113,23 +1133,31 @@ void MixMentorEditor::recheckFixList()
             const bool stillThere = r.resonanceHz > 0.0f && std::abs (r.resonanceHz - is.focusHz) < is.focusHz * 0.08f;
             const float now = stillThere ? r.resonanceDb : 0.0f;
             const float change = is.baseline - now;
+            const float rangeChange = is.baselineLevel - r.isolatedDb;   // the whole range got quieter?
             is.latestChange = change;
-            is.status = (! stillThere || change >= 3.0f) ? 1 : change >= 1.0f ? 2 : change <= -2.0f ? 4 : 3;
+            is.status = (! stillThere || change >= 3.0f) ? 1 : change >= 1.0f ? 2 : change <= -2.0f ? 4
+                      : rangeChange >= 1.5f ? 5 : 3;
+            heard = heard || std::abs (change) >= 1.0f || std::abs (rangeChange) >= 1.0f;
             continue;
         }
 
         const float now = is.bump ? r.bumpDb : r.relativeDb;
-        const float change = (is.baseline - now) * (float) is.action;   // > 0 = moved the right way
+        // Two views of the same range: its shape against its neighbours, and its level against the
+        // far-away rest of the track. A wide EQ move shows up clearly in the second, so take the larger.
+        const float shapeChange = (is.baseline - now) * (float) is.action;
+        const float levelChange = (is.baselineLevel - r.isolatedDb) * (float) is.action;
+        const float change = std::abs (levelChange) > std::abs (shapeChange) ? levelChange : shapeChange;
         const bool inRange = is.bump ? (is.action > 0 ? now <= 1.5f : now >= -1.5f)
                                      : (is.action > 0 ? now <= zone.targetMaxDb + 1.0f : now >= zone.targetMinDb - 1.0f);
-        const float neededChange = is.bump ? juce::jmax (1.5f, std::abs (is.baseline) * 0.6f)
-                                           : juce::jmax (2.0f, is.amount * 0.6f);
+        const float neededChange = juce::jmax (1.5f, juce::jmin (is.amount * 0.6f, is.bump ? std::abs (is.baseline) + 1.0f : 99.0f));
         is.latestChange = change;
+        heard = heard || std::abs (change) >= 1.0f;
         if (inRange || change >= neededChange)                       is.status = 1;   // fixed
         else if (change >= 0.8f)                                     is.status = 2;   // improved
         else if (change <= -1.5f)                                    is.status = 4;   // worse
         else                                                         is.status = 3;   // no change heard
     }
+    fs.heardChange = heard;
     ++fs.checks;
 }
 
@@ -1210,6 +1238,13 @@ void MixMentorEditor::refreshFixPanel()
                 row.body = "I didn't hear a change here. Is your EQ band between " + fmtRange (is)
                          + "? Is Mix Mentor after your EQ? " + how;
                 break;
+            case 5:
+                row.state = 5; ++open;
+                row.chip = "narrow cut";
+                row.title = label + ": still ringing";
+                row.body = "Your cut lowered the whole range, but " + fmtRange (is) + " still rings above it. "
+                           "Add a narrow bell (Q 5-8) right at " + fmtRange (is) + ", about -" + amt + " dB.";
+                break;
             case 4:
                 row.state = 7; ++open;
                 row.chip = verb + " ~" + amt + " dB";
@@ -1233,7 +1268,7 @@ void MixMentorEditor::refreshFixPanel()
             {
                 m.state = row.state;
                 m.text = row.state == 3 ? "fixed" : row.state == 6 ? "no change" : row.state == 7 ? "worse"
-                       : row.state == 5 ? "a bit more" : verb + " ~" + amt + " dB";
+                       : row.state == 5 ? juce::String (is.status == 5 ? "narrow cut" : "a bit more") : verb + " ~" + amt + " dB";
             }
         }
     }
@@ -1244,7 +1279,7 @@ void MixMentorEditor::refreshFixPanel()
             zoneMarks[z] = { 4, "ok" };
 
     juce::String warning;
-    if (fs.checks > 0 && open > 0 && noChange == open)
+    if (fs.checks > 0 && open > 0 && noChange == open && ! fs.heardChange)
         warning = "I didn't hear any of your changes. Mix Mentor must be the LAST plugin on this track, "
                   "after your EQ, and the same part of the song should be playing.";
 

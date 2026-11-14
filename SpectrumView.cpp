@@ -215,6 +215,20 @@ void SpectrumView::computeReadings()
             r.bumpDb = bumpCount > 0 ? (float) (bumpSum / bumpCount) : 0.0f;
         }
 
+        {
+            // Level of the zone against everything at least an octave away from it. A wide EQ cut
+            // also lowers the zone's neighbours (so the bump hardly changes), but it can't reach
+            // this far, so this shows any cut or boost you make on the zone.
+            double acc = 0.0; int count = 0;
+            for (int k = 0; k < gridN; ++k)
+            {
+                const float f = gridHz[(size_t) k];
+                if (f < 30.0f || f > 16000.0f || (f > zone.lowHz * 0.5f && f < zone.highHz * 2.0f)) continue;
+                acc += level[(size_t) k]; ++count;
+            }
+            r.isolatedDb = count > 0 ? r.levelDb - (float) (acc / count) : r.relativeDb;
+        }
+
         if (r.relativeDb > zone.targetMaxDb)        { r.status = 1;  r.deviationDb = r.relativeDb - zone.targetMaxDb; }
         else if (r.relativeDb < zone.targetMinDb)   { r.status = -1; r.deviationDb = r.relativeDb - zone.targetMinDb; }
 

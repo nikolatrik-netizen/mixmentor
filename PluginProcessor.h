@@ -4,6 +4,7 @@
 #include <atomic>
 #include <vector>
 #include <map>
+#include "MelodyCore.h"
 
 /** One range the analysis asked you to adjust, and how your fix went. */
 struct FixIssue
@@ -16,8 +17,9 @@ struct FixIssue
     bool bump = false;              // measured as a bump/dip against its neighbours (else against the target range)
     float amount = 3.0f;            // suggested change in dB
     float baseline = 0.0f;          // what the analysis measured (relative level, or how far a resonance sticks out)
+    float baselineLevel = 0.0f;     // the range's level compared with the rest of the track, far from it (for re-checks)
     float latestChange = 0.0f;      // dB moved in the right direction at the last re-check
-    int status = 0;                 // 0 to do, 1 fixed, 2 improved, 3 no change heard, 4 got worse
+    int status = 0;                 // 0 to do, 1 fixed, 2 improved, 3 no change heard, 4 got worse, 5 range cut but still ringing
 };
 
 /** The result of "analyse": a frozen list of things to fix. Saved with the project. */
@@ -27,6 +29,7 @@ struct FixSession
     juce::String genreId, instrumentId;
     std::vector<FixIssue> issues;
     juce::StringArray goodZones;
+    bool heardChange = true;        // did the last re-check hear any of the user's moves?
     int checks = 0;
 };
 
@@ -38,6 +41,7 @@ public:
     ~MixMentorProcessor() override = default;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    juce::MidiBuffer melodyMidi;
     void releaseResources() override {}
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
@@ -88,6 +92,7 @@ public:
 
     /** The current fix list (message thread only). */
     FixSession fixSession;
+    MelodyCore melody;               // the melody tab (previews through this track)
 
     /** Ticked workflow steps (bit n = step n), per genre id. Message thread only. */
     std::map<juce::String, juce::uint32> workflowProgress;

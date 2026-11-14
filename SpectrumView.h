@@ -14,6 +14,7 @@ struct ZoneReading
     float resonanceHz = 0.0f;   // narrow ringing peak, 0 if none
     float resonanceDb = 0.0f;   // how far that peak sticks out
     float bumpDb = 0.0f;        // how far the zone sticks out (+) or dips (-) compared with its neighbours
+    float isolatedDb = 0.0f;    // zone level minus the track's level far away from the zone (an EQ cut here lowers this 1:1)
     int status = 0;             // +1 too much, -1 too little, 0 OK
 };
 

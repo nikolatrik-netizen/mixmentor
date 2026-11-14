@@ -35,6 +35,8 @@ void MixMentorProcessor::prepareToPlay (double sampleRate, int)
     fifo.reset();
     trimGain.reset (sampleRate, 0.05);   // 50 ms ramp so trim changes never click
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (trimDb->load()));
+    melody.prepare (sampleRate);
+    melodyMidi.ensureSize (2048);
 }
 
 bool MixMentorProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -103,6 +105,10 @@ void MixMentorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     float current = peakSinceLastRead.load();
     while (blockPeak > current && ! peakSinceLastRead.compare_exchange_weak (current, blockPeak)) {}
+
+    // Melody tab preview: added after the analysis, so it never affects the mix advice.
+    melodyMidi.clear();
+    melody.process (buffer, melodyMidi, getPlayHead());
 }
 
 int MixMentorProcessor::readAnalysisSamples (float* dest, int maxSamples)
@@ -176,10 +182,13 @@ void MixMentorProcessor::getStateInformation (juce::MemoryBlock& destData)
             e->setAttribute ("bump", is.bump);
             e->setAttribute ("amount", is.amount);
             e->setAttribute ("baseline", is.baseline);
+            e->setAttribute ("baseLvl", is.baselineLevel);
             e->setAttribute ("change", is.latestChange);
             e->setAttribute ("status", is.status);
         }
     }
+
+    melody.writeState (*xml.createNewChildElement ("Melody"));
 
     for (auto& [genreId, bits] : workflowProgress)
     {
@@ -203,6 +212,9 @@ void MixMentorProcessor::setStateInformation (const void* data, int sizeInBytes)
         if (auto* paramsXml = xml->getChildByName (parameters.state.getType()))
             parameters.replaceState (juce::ValueTree::fromXml (*paramsXml));
 
+        if (auto* m = xml->getChildByName ("Melody"))
+            melody.readState (*m);
+
         fixSession = {};
         if (auto* fx = xml->getChildByName ("FixSession"))
         {
@@ -224,6 +236,7 @@ void MixMentorProcessor::setStateInformation (const void* data, int sizeInBytes)
                 is.bump = e->getBoolAttribute ("bump");
                 is.amount = (float) e->getDoubleAttribute ("amount", 3.0);
                 is.baseline = (float) e->getDoubleAttribute ("baseline");
+                is.baselineLevel = (float) e->getDoubleAttribute ("baseLvl");
                 is.latestChange = (float) e->getDoubleAttribute ("change");
                 is.status = e->getIntAttribute ("status");
                 fixSession.issues.push_back (is);

@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SpectrumView.h"
+#include "MelodyPanel.h"
 #include "Theme.h"
 
 /** Full-window overlay shown on first load: "what are you making today?" */
@@ -160,6 +161,8 @@ private:
     juce::Viewport workflowView;
     FixPanel fixPanel;
     int captureKind = 0;   // 1 = analyse, 2 = re-check
+    SegmentedControl modeTabs;          // mix | melody
+    MelodyPanel melodyPanel { processor.melody, true };
     GenrePicker picker;
     juce::TooltipWindow tooltipWindow { this, 350 };
 

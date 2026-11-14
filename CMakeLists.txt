@@ -37,7 +37,10 @@ target_sources(MixMentor PRIVATE
     PluginEditor.cpp
     SpectrumView.cpp
     LevelMeter.cpp
-    Theme.cpp)
+    Theme.cpp
+    MelodyEngine.cpp
+    MelodyCore.cpp
+    MelodyPanel.cpp)
 
 target_compile_definitions(MixMentor PUBLIC
     JUCE_WEB_BROWSER=0
@@ -79,8 +82,9 @@ target_sources(MixMentorMelody PRIVATE
     KnowledgeBase.cpp
     Theme.cpp
     MelodyEngine.cpp
-    MelodyProcessor.cpp
-    MelodyEditor.cpp)
+    MelodyCore.cpp
+    MelodyPanel.cpp
+    MelodyProcessor.cpp)
 
 target_compile_definitions(MixMentorMelody PUBLIC
     JUCE_WEB_BROWSER=0
