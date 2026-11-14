@@ -1,4 +1,8 @@
 #include "PluginProcessor.h"
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <vector>
 #include "PluginEditor.h"
 #include "KnowledgeBase.h"
 
@@ -152,6 +156,31 @@ void MixMentorProcessor::getStateInformation (juce::MemoryBlock& destData)
     if (auto paramsXml = parameters.copyState().createXml())
         xml.addChildElement (paramsXml.release());
 
+    if (fixSession.valid)
+    {
+        auto* fx = xml.createNewChildElement ("FixSession");
+        fx->setAttribute ("genre", fixSession.genreId);
+        fx->setAttribute ("instrument", fixSession.instrumentId);
+        fx->setAttribute ("good", fixSession.goodZones.joinIntoString ("|"));
+        fx->setAttribute ("checks", fixSession.checks);
+        for (auto& is : fixSession.issues)
+        {
+            auto* e = fx->createNewChildElement ("Issue");
+            e->setAttribute ("zone", is.zone);
+            e->setAttribute ("label", is.label);
+            e->setAttribute ("lo", is.lowHz);
+            e->setAttribute ("hi", is.highHz);
+            e->setAttribute ("focus", is.focusHz);
+            e->setAttribute ("action", is.action);
+            e->setAttribute ("res", is.resonance);
+            e->setAttribute ("bump", is.bump);
+            e->setAttribute ("amount", is.amount);
+            e->setAttribute ("baseline", is.baseline);
+            e->setAttribute ("change", is.latestChange);
+            e->setAttribute ("status", is.status);
+        }
+    }
+
     for (auto& [genreId, bits] : workflowProgress)
     {
         auto* w = xml.createNewChildElement ("Workflow");
@@ -173,6 +202,33 @@ void MixMentorProcessor::setStateInformation (const void* data, int sizeInBytes)
 
         if (auto* paramsXml = xml->getChildByName (parameters.state.getType()))
             parameters.replaceState (juce::ValueTree::fromXml (*paramsXml));
+
+        fixSession = {};
+        if (auto* fx = xml->getChildByName ("FixSession"))
+        {
+            fixSession.valid = true;
+            fixSession.genreId = fx->getStringAttribute ("genre");
+            fixSession.instrumentId = fx->getStringAttribute ("instrument");
+            fixSession.goodZones = juce::StringArray::fromTokens (fx->getStringAttribute ("good"), "|", "");
+            fixSession.checks = fx->getIntAttribute ("checks");
+            for (auto* e : fx->getChildWithTagNameIterator ("Issue"))
+            {
+                FixIssue is;
+                is.zone = e->getIntAttribute ("zone");
+                is.label = e->getStringAttribute ("label");
+                is.lowHz = (float) e->getDoubleAttribute ("lo");
+                is.highHz = (float) e->getDoubleAttribute ("hi");
+                is.focusHz = (float) e->getDoubleAttribute ("focus");
+                is.action = e->getIntAttribute ("action", 1);
+                is.resonance = e->getBoolAttribute ("res");
+                is.bump = e->getBoolAttribute ("bump");
+                is.amount = (float) e->getDoubleAttribute ("amount", 3.0);
+                is.baseline = (float) e->getDoubleAttribute ("baseline");
+                is.latestChange = (float) e->getDoubleAttribute ("change");
+                is.status = e->getIntAttribute ("status");
+                fixSession.issues.push_back (is);
+            }
+        }
 
         workflowProgress.clear();
         for (auto* w : xml->getChildWithTagNameIterator ("Workflow"))

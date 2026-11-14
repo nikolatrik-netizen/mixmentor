@@ -1,4 +1,8 @@
 #include "Theme.h"
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <vector>
 #include "BinaryData.h"
 
 namespace theme

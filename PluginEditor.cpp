@@ -1,15 +1,13 @@
 #include "PluginEditor.h"
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <vector>
 
 using namespace theme;
 
 namespace
 {
-    juce::String fillTemplate (juce::String t, const juce::StringPairArray& values)
-    {
-        for (auto& key : values.getAllKeys())
-            t = t.replace ("{" + key + "}", values[key]);
-        return t;
-    }
 
     constexpr int sidebarWidth = 252;
     constexpr int topBarHeight = 38;
@@ -295,26 +293,56 @@ void GainGauge::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-void AdvicePanel::setItems (std::vector<Item> newItems, bool isLive, int issueCount)
+FixPanel::FixPanel()
 {
-    items = std::move (newItems);
-    live = isLive;
-    issues = issueCount;
+    analyseButton.setTooltip ("Analyse\nLoop the loudest 4-8 bars of this track, then press this. "
+                              "Mix Mentor listens for 4 seconds and makes a list of ranges to fix.");
+    analyseButton.onClick = [this] { if (onAnalyse) onAnalyse(); };
+    addAndMakeVisible (analyseButton);
+
+    startOverButton.setTooltip ("Start over\nClear the list and analyse from scratch.");
+    startOverButton.onClick = [this] { if (onStartOver) onStartOver(); };
+    addChildComponent (startOverButton);
+}
+
+void FixPanel::setContent (int newMode, float newProgress, std::vector<Row> newRows, const juce::String& good,
+                           const juce::String& warning, bool canRecheck)
+{
+    mode = newMode; progress = newProgress; rows = std::move (newRows);
+    goodText = good; warningText = warning;
+    analyseButton.setButtonText (canRecheck ? "re-check" : mode == 2 ? "analyse again" : "analyse");
+    analyseButton.setEnabled (mode != 1);
+    startOverButton.setVisible (mode == 2);
+    resized();
     repaint();
 }
 
-void AdvicePanel::paint (juce::Graphics& g)
+void FixPanel::resized()
+{
+    auto b = getLocalBounds().reduced (16, 14).removeFromBottom (34);
+    if (startOverButton.isVisible())
+    {
+        startOverButton.setBounds (b.removeFromRight (100));
+        b.removeFromRight (8);
+    }
+    analyseButton.setBounds (b);
+}
+
+void FixPanel::paint (juce::Graphics& g)
 {
     drawPanel (g, getLocalBounds().toFloat(), col::panel, 0.0f);
     auto area = getLocalBounds().toFloat().reduced (16.0f, 14.0f);
+    area.removeFromBottom (44.0f);   // buttons
 
-    // Header: title + issue count / live badge
+    // Header + count badge
     auto top = area.removeFromTop (18.0f);
-    drawLabel (g, "problem frequencies", top);
-    if (live)
+    drawLabel (g, "fix list", top);
+    int toDo = 0, fixedCount = 0;
+    for (auto& r : rows) { if (r.state == 3) ++fixedCount; else ++toDo; }
+    if (mode == 2)
     {
-        const auto txt = issues == 0 ? juce::String ("all clear") : juce::String (issues) + (issues == 1 ? " issue" : " issues");
-        const auto c = issues == 0 ? col::good : col::accent;
+        const auto txt = rows.empty() ? juce::String ("all good") : toDo == 0 ? juce::String ("all fixed") : juce::String (toDo) + " to fix";
+        const auto c = toDo == 0 ? col::good : col::accent;
         g.setFont (font (12.0f, true));
         const float w = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), txt) + 22.0f;
         const auto badge = top.removeFromRight (w).withSizeKeepingCentre (w, 18.0f);
@@ -326,63 +354,120 @@ void AdvicePanel::paint (juce::Graphics& g)
     }
     area.removeFromTop (12.0f);
 
-    for (auto& item : items)
+    auto wrapped = [&] (const juce::String& text, float size, juce::Colour c, juce::Rectangle<float> r, bool draw = true)
     {
-        if (area.getHeight() < 40.0f)
-            break;
+        juce::AttributedString s;
+        s.setWordWrap (juce::AttributedString::byWord);
+        s.append (text, font (size), c);
+        s.setLineSpacing (1.5f);
+        juce::TextLayout tl;
+        tl.createLayout (s, r.getWidth());
+        if (draw) tl.draw (g, r.withHeight (juce::jmin (tl.getHeight(), r.getHeight())));
+        return tl.getHeight();
+    };
 
-        const bool isIssue = item.freq.isNotEmpty();
-
-        juce::AttributedString body;
-        body.setWordWrap (juce::AttributedString::byWord);
-        body.append (item.body, font (12.5f), col::textDim);
-        body.setLineSpacing (1.5f);
-        juce::TextLayout layout;
-        layout.createLayout (body, area.getWidth() - 14.0f);
-
-        const float headH = isIssue ? 40.0f : 20.0f;
-        const float h = juce::jmin (headH + layout.getHeight() + 14.0f, area.getHeight());
-        auto card = area.removeFromTop (h);
+    if (mode == 0)
+    {
+        wrapped ("How it works:\n\n"
+                 "1.  Put Mix Mentor LAST on the track, after your EQ and compressor.\n"
+                 "2.  Loop the loudest 4-8 bars and press play.\n"
+                 "3.  Press analyse. It listens for 4 seconds and lists the ranges to cut or boost.\n"
+                 "4.  Make your EQ moves, then press re-check. Each range is marked fixed once it really changed.",
+                 13.0f, col::textDim, area);
+        return;
+    }
+    if (mode == 1)
+    {
+        g.setColour (col::text);
+        g.setFont (font (15.0f, true));
+        g.drawText ("listening...", area.removeFromTop (22.0f), juce::Justification::centredLeft, false);
         area.removeFromTop (8.0f);
+        auto bar = area.removeFromTop (6.0f);
+        g.setColour (col::box);
+        g.fillRoundedRectangle (bar, 3.0f);
+        g.setColour (col::accent);
+        g.fillRoundedRectangle (bar.withWidth (bar.getWidth() * progress), 3.0f);
+        area.removeFromTop (12.0f);
+        wrapped ("Keep the loop playing. Only time with sound counts, so silence just pauses it.", 12.5f, col::textDim, area);
+        return;
+    }
 
-        if (isIssue)
+    if (warningText.isNotEmpty())
+    {
+        const float h = wrapped (warningText, 12.5f, col::bad, area.reduced (10.0f, 0.0f), false) + 16.0f;
+        auto box = area.removeFromTop (h);
+        g.setColour (col::bad.withAlpha (0.12f));
+        g.fillRoundedRectangle (box, 5.0f);
+        wrapped (warningText, 12.5f, col::bad.brighter (0.3f), box.reduced (10.0f, 8.0f));
+        area.removeFromTop (8.0f);
+    }
+
+    // Open items first, then fixed ones (compact)
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        for (auto& r : rows)
         {
+            const bool isFixed = r.state == 3;
+            if ((pass == 0) == isFixed || area.getHeight() < 30.0f)
+                continue;
+
+            juce::Colour c = r.state == 1 || r.state == 7 ? col::bad : r.state == 2 ? col::warn
+                           : r.state == 3 ? col::good : r.state == 5 ? col::accent : col::textDim;
+
+            if (isFixed)
+            {
+                auto line = area.removeFromTop (22.0f);
+                area.removeFromTop (4.0f);
+                g.setColour (col::good);
+                g.fillEllipse (line.getX(), line.getCentreY() - 4.0f, 8.0f, 8.0f);
+                g.setFont (font (13.0f, true));
+                g.setColour (col::text.withAlpha (0.8f));
+                g.drawText (r.range + "   " + r.title, line.withTrimmedLeft (16.0f), juce::Justification::centredLeft, true);
+                continue;
+            }
+
+            const float bodyH = wrapped (r.body, 12.5f, col::textDim, area.reduced (14.0f, 0.0f), false);
+            const float h = juce::jmin (area.getHeight(), 22.0f + 18.0f + bodyH + 16.0f);
+            auto card = area.removeFromTop (h);
+            area.removeFromTop (8.0f);
+
             g.setColour (col::box.withAlpha (0.6f));
             g.fillRoundedRectangle (card, 5.0f);
-        }
-        g.setColour (item.colour);
-        g.fillRoundedRectangle (card.getX(), card.getY() + 6.0f, 3.0f, card.getHeight() - 12.0f, 1.5f);
+            g.setColour (c);
+            g.fillRoundedRectangle (card.getX(), card.getY() + 6.0f, 3.0f, card.getHeight() - 12.0f, 1.5f);
 
-        auto inner = card.reduced (14.0f, 7.0f).withTrimmedLeft (0.0f);
-        if (isIssue)
-        {
-            // Big frequency read-out + amount chip, then the zone name
+            auto inner = card.reduced (14.0f, 7.0f);
             auto row = inner.removeFromTop (22.0f);
             g.setColour (col::text);
-            g.setFont (font (18.0f, true));
-            g.drawText (item.freq, row, juce::Justification::centredLeft, false);
-
-            g.setFont (font (12.0f, true));
-            const float cw = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), item.amount) + 14.0f;
-            const auto chip = row.removeFromRight (cw).withSizeKeepingCentre (cw, 18.0f);
-            g.setColour (item.colour.withAlpha (0.16f));
-            g.fillRoundedRectangle (chip, 9.0f);
-            g.setColour (item.colour);
-            g.drawText (item.amount, chip, juce::Justification::centred, false);
-
-            g.setColour (col::textDim);
+            g.setFont (font (17.0f, true));
+            g.drawText (r.range, row, juce::Justification::centredLeft, false);
+            if (r.chip.isNotEmpty())
+            {
+                g.setFont (font (12.0f, true));
+                const float cw = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), r.chip) + 16.0f;
+                const auto chip = row.removeFromRight (cw).withSizeKeepingCentre (cw, 20.0f);
+                g.setColour (c.withAlpha (0.16f));
+                g.fillRoundedRectangle (chip, 10.0f);
+                g.setColour (c);
+                g.drawText (r.chip, chip, juce::Justification::centred, false);
+            }
+            g.setColour (c == col::textDim ? col::textDim : c.brighter (0.2f));
             g.setFont (font (12.5f, true));
-            g.drawText (item.title, inner.removeFromTop (16.0f), juce::Justification::centredLeft, true);
-            inner.removeFromTop (4.0f);
+            g.drawText (r.title, inner.removeFromTop (18.0f), juce::Justification::centredLeft, true);
+            wrapped (r.body, 12.5f, col::textDim, inner);
         }
-        else
+        if (pass == 0 && fixedCount > 0 && area.getHeight() > 30.0f)
         {
-            g.setColour (col::text);
-            g.setFont (font (13.5f, true));
-            g.drawText (item.title, inner.removeFromTop (18.0f), juce::Justification::centredLeft, true);
-            inner.removeFromTop (2.0f);
+            area.removeFromTop (4.0f);
+            drawLabel (g, "fixed", area.removeFromTop (18.0f), col::textFaint);
+            area.removeFromTop (4.0f);
         }
-        layout.draw (g, inner);
+    }
+
+    if (goodText.isNotEmpty() && area.getHeight() > 30.0f)
+    {
+        area.removeFromTop (6.0f);
+        wrapped ("Looks good: " + goodText, 12.5f, col::textFaint, area);
     }
 }
 
@@ -557,18 +642,13 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
     };
     addAndMakeVisible (instrumentBox);
 
-    relistenButton.getProperties().set ("flat", true);
-    relistenButton.setTooltip ("Re-listen\nForget what the analyzer has heard so far and start again, e.g. after changing your EQ or moving to a new section.");
-    relistenButton.onClick = [this] { spectrum.resetAnalysis(); updateAdvice(); };
-    addAndMakeVisible (relistenButton);
-
     guideButton.getProperties().set ("flat", true);
     guideButton.setTooltip ("How to read the analyzer\n"
                             "White line: the average of the last few seconds.\n"
                             "Blue area: the live sound.\n"
                             "Dashed boxes: the target range for your genre and instrument.\n"
                             "Coloured bars: where each zone measures now (green ok, red too much, orange too little).\n\n"
-                            "Hover a zone for its tip.\n\n"
+                            "Press analyse in the fix list to get a list of ranges to cut or boost. Hover a zone for its tip.\n\n"
                             "Put Mix Mentor last on the track (after your EQ and compressor), "
                             "otherwise it can't hear your changes.");
     addAndMakeVisible (guideButton);
@@ -589,7 +669,19 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
         holdDb = -100.0f;   // re-measure from scratch with the new trim
         holdFrames = 0;
     };
-    addAndMakeVisible (advice);
+    addAndMakeVisible (fixPanel);
+    fixPanel.onAnalyse = [this]
+    {
+        bool anyOpen = false;
+        for (auto& is : processor.fixSession.issues) anyOpen = anyOpen || is.status != 1;
+        startCapture (processor.fixSession.valid && fixListMatchesSettings() && anyOpen ? 2 : 1);
+    };
+    fixPanel.onStartOver = [this]
+    {
+        processor.fixSession = {};
+        spectrum.resetAnalysis();
+        refreshFixPanel();
+    };
 
     juce::StringArray processNames;
     for (auto& proc : kb.processes())
@@ -804,12 +896,10 @@ void MixMentorEditor::resized()
     {
         auto tb = topBar.reduced (8, 5);
         guideButton.setBounds (tb.removeFromRight (30));
-        tb.removeFromRight (4);
-        relistenButton.setBounds (tb.removeFromRight (90));
     }
 
     auto upper = area.removeFromTop ((int) (area.getHeight() * 0.55f));
-    advice.setBounds (upper.removeFromRight (320));
+    fixPanel.setBounds (upper.removeFromRight (330));
     spectrum.setBounds (upper);
 
     area = area.reduced (16, 14);
@@ -887,7 +977,7 @@ void MixMentorEditor::refreshContent()
     }
 
     updateGainStatus();
-    updateAdvice();
+    refreshFixPanel();
     repaint();
 }
 
@@ -900,108 +990,270 @@ void MixMentorEditor::updateGainStatus()
                     guide != nullptr);
 }
 
-void MixMentorEditor::updateAdvice()
+bool MixMentorEditor::fixListMatchesSettings() const
+{
+    const auto& kb = mm::KnowledgeBase::get();
+    const int g = processor.genreIndex.load(), i = processor.instrumentIndex.load();
+    if (! juce::isPositiveAndBelow (g, (int) kb.genres().size()) || ! juce::isPositiveAndBelow (i, (int) kb.instruments().size()))
+        return false;
+    return processor.fixSession.genreId == kb.genres()[(size_t) g].id
+        && processor.fixSession.instrumentId == kb.instruments()[(size_t) i].id;
+}
+
+void MixMentorEditor::startCapture (int kind)
+{
+    captureKind = kind;
+    spectrum.startCapture (4.0f);
+    refreshFixPanel();
+}
+
+void MixMentorEditor::captureFinished()
+{
+    if (captureKind == 2) recheckFixList();
+    else                  buildFixList();
+    captureKind = 0;
+    refreshFixPanel();
+}
+
+void MixMentorEditor::buildFixList()
 {
     const auto& kb = mm::KnowledgeBase::get();
     const int g = processor.genreIndex.load(), i = processor.instrumentIndex.load();
     const auto* guide = kb.findGuide (g, i);
-
-    if (guide == nullptr)
-    {
-        advice.setItems ({}, false);
-        return;
-    }
-
-    const auto gName = kb.genres()[(size_t) g].name;
-    const auto instrumentName = kb.instruments()[(size_t) i].name.toLowerCase();
-    const juce::Colour grey = col::textFaint;
-
-    if (! spectrum.hasReadings())
-    {
-        advice.setItems ({ { grey, "listening...",
-                             "Play the track (solo it for the most accurate advice). Put Mix Mentor LAST on the track, "
-                             "after your EQ and compressor, so it hears your changes. Advice appears after about 2 seconds.", {}, {} } }, false);
-        return;
-    }
-
     const auto& zones = spectrum.getZones();
     const auto& readings = spectrum.getReadings();
-    if (zones.size() != readings.size())
+    if (guide == nullptr || zones.size() != readings.size())
         return;
 
-    struct Ranked { float severity; AdvicePanel::Item item; };
-    std::vector<Ranked> problems;
-    juce::StringArray okZones;
+    FixSession fs;
+    fs.valid = true;
+    fs.genreId = kb.genres()[(size_t) g].id;
+    fs.instrumentId = kb.instruments()[(size_t) i].id;
+
+    struct Candidate { float severity; FixIssue issue; };
+    std::vector<Candidate> found;
+    constexpr float tolerance = 3.0f;   // only clear problems make the list
 
     for (size_t z = 0; z < zones.size(); ++z)
     {
         const auto& zone = zones[z];
         const auto& r = readings[z];
-        const float dev = std::abs (r.deviationDb);
+        bool flagged = false;
 
-        juce::StringPairArray values;
-        values.set ("label", zone.label.toLowerCase());
-        values.set ("genre", gName);
-        values.set ("instrument", instrumentName);
-        values.set ("dev", juce::String (dev, 1));
-        values.set ("amt", juce::String (juce::jlimit (1, 6, (int) std::round (dev))));
-        values.set ("hz", SpectrumView::formatHz (r.peakHz));
-        values.set ("lo", SpectrumView::formatHz (zone.lowHz));
-        values.set ("hi", SpectrumView::formatHz (zone.highHz));
+        // Too much: a clear build-up compared with the neighbouring frequencies. Boost zones (like a
+        // kick's thump) are supposed to stick out, so they're only flagged when it's extreme.
+        const float bumpLimit = zone.kind == "boost" ? 9.0f : zone.kind == "watch" ? 3.5f : 2.5f;
+        const bool tooMuch = r.bumpDb > bumpLimit
+                          || (r.relativeDb > zone.targetMaxDb + 6.0f && r.bumpDb > 1.0f);
+        // Too little: a clear hole, or far below the genre's typical level.
+        const bool tooLittle = ! tooMuch && ((zone.kind == "boost" && r.bumpDb < -5.0f)
+                                             || r.relativeDb < zone.targetMinDb - tolerance);
 
-        if (r.status > 0)
+        if (tooMuch || tooLittle)
         {
-            const auto tmpl = zone.tooMuch.isNotEmpty() ? zone.tooMuch
-                : juce::String ("There's {dev} dB more {label} than typical for a {genre} {instrument}. "
-                                "Cut about {amt} dB around {hz} with a medium-wide bell (Q 1-2), then give it a second to re-measure.");
-            problems.push_back ({ dev, { SpectrumView::colourForStatus (1),
-                                         zone.label.toLowerCase() + juce::String::fromUTF8 ("  \xe2\x80\x94  too much"),
-                                         fillTemplate (tmpl, values),
-                                         SpectrumView::formatHz (r.peakHz), "+" + juce::String (dev, 1) + " dB" } });
+            FixIssue is;
+            is.zone = (int) z;
+            is.label = zone.label;
+            is.lowHz = zone.lowHz; is.highHz = zone.highHz; is.focusHz = r.peakHz;
+            is.action = tooMuch ? 1 : -1;
+            is.bump = tooMuch ? true : (zone.kind == "boost" && r.bumpDb < -5.0f);
+            const float dev = is.bump ? std::abs (r.bumpDb) : std::abs (r.relativeDb - zone.targetMinDb);
+            // An EQ bell only partly covers a zone, so suggest a bit more than the measured bump.
+            is.amount = juce::jlimit (2.0f, 6.0f, std::round (is.bump ? dev + 1.0f : dev * 0.8f));
+            is.baseline = is.bump ? r.bumpDb : r.relativeDb;
+            found.push_back ({ dev, is });
+            flagged = true;
         }
-        else if (r.status < 0)
+
+        if (r.resonanceHz > 0.0f && r.resonanceDb >= 12.0f)
         {
-            const auto tmpl = zone.tooLittle.isNotEmpty() ? zone.tooLittle
-                : juce::String ("There's {dev} dB less {label} than typical for a {genre} {instrument}. "
-                                "Boost about {amt} dB around {hz} with a wide bell (Q 0.7-1.5), then give it a second to re-measure.");
-            problems.push_back ({ dev, { SpectrumView::colourForStatus (-1),
-                                         zone.label.toLowerCase() + juce::String::fromUTF8 ("  \xe2\x80\x94  too little"),
-                                         fillTemplate (tmpl, values),
-                                         SpectrumView::formatHz (r.peakHz), "-" + juce::String (dev, 1) + " dB" } });
+            FixIssue is;
+            is.zone = (int) z;
+            is.label = zone.label;
+            is.resonance = true;
+            is.focusHz = r.resonanceHz;
+            is.lowHz = r.resonanceHz * 0.94f; is.highHz = r.resonanceHz * 1.06f;
+            is.action = 1;
+            is.amount = r.resonanceDb >= 16.0f ? 5.0f : 3.0f;
+            is.baseline = r.resonanceDb;
+            found.push_back ({ r.resonanceDb - 8.0f, is });
+            flagged = true;
         }
+
+        if (! flagged)
+            fs.goodZones.add (zone.label.toLowerCase());
+    }
+
+    std::sort (found.begin(), found.end(), [] (auto& a, auto& b) { return a.severity > b.severity; });
+    for (size_t k = 0; k < found.size() && k < 4; ++k)
+        fs.issues.push_back (found[k].issue);
+
+    processor.fixSession = fs;
+}
+
+void MixMentorEditor::recheckFixList()
+{
+    auto& fs = processor.fixSession;
+    const auto& zones = spectrum.getZones();
+    const auto& readings = spectrum.getReadings();
+    if (zones.size() != readings.size())
+        return;
+
+    for (auto& is : fs.issues)
+    {
+        if (is.status == 1 || ! juce::isPositiveAndBelow (is.zone, (int) readings.size()))
+            continue;   // fixed stays fixed
+
+        const auto& zone = zones[(size_t) is.zone];
+        const auto& r = readings[(size_t) is.zone];
+
+        if (is.resonance)
+        {
+            // How much less the ringing frequency sticks out than before (0 if it's gone).
+            const bool stillThere = r.resonanceHz > 0.0f && std::abs (r.resonanceHz - is.focusHz) < is.focusHz * 0.08f;
+            const float now = stillThere ? r.resonanceDb : 0.0f;
+            const float change = is.baseline - now;
+            is.latestChange = change;
+            is.status = (! stillThere || change >= 3.0f) ? 1 : change >= 1.0f ? 2 : change <= -2.0f ? 4 : 3;
+            continue;
+        }
+
+        const float now = is.bump ? r.bumpDb : r.relativeDb;
+        const float change = (is.baseline - now) * (float) is.action;   // > 0 = moved the right way
+        const bool inRange = is.bump ? (is.action > 0 ? now <= 1.5f : now >= -1.5f)
+                                     : (is.action > 0 ? now <= zone.targetMaxDb + 1.0f : now >= zone.targetMinDb - 1.0f);
+        const float neededChange = is.bump ? juce::jmax (1.5f, std::abs (is.baseline) * 0.6f)
+                                           : juce::jmax (2.0f, is.amount * 0.6f);
+        is.latestChange = change;
+        if (inRange || change >= neededChange)                       is.status = 1;   // fixed
+        else if (change >= 0.8f)                                     is.status = 2;   // improved
+        else if (change <= -1.5f)                                    is.status = 4;   // worse
+        else                                                         is.status = 3;   // no change heard
+    }
+    ++fs.checks;
+}
+
+void MixMentorEditor::refreshFixPanel()
+{
+    const auto& fs = processor.fixSession;
+    std::vector<ZoneMark> zoneMarks (spectrum.getZones().size());
+
+    if (spectrum.isCapturing())
+    {
+        fixPanel.setContent (1, spectrum.getCaptureProgress(), {}, {}, {}, fs.valid && fixListMatchesSettings());
+        spectrum.setZoneMarks (zoneMarks);
+        return;
+    }
+
+    if (! fs.valid || ! fixListMatchesSettings())
+    {
+        fixPanel.setContent (0, 0.0f, {}, {}, {}, false);
+        spectrum.setZoneMarks (zoneMarks);
+        return;
+    }
+
+    auto fmtRange = [] (const FixIssue& is)
+    {
+        if (is.resonance) return SpectrumView::formatHz (is.focusHz);
+        auto lo = SpectrumView::formatHz (is.lowHz), hi = SpectrumView::formatHz (is.highHz);
+        if (lo.endsWith (" Hz") && hi.endsWith (" Hz")) lo = lo.dropLastCharacters (3);
+        if (lo.endsWith (" kHz") && hi.endsWith (" kHz")) lo = lo.dropLastCharacters (4);
+        return lo + "-" + hi;
+    };
+
+    const auto& kb = mm::KnowledgeBase::get();
+    const auto* guide = kb.findGuide (processor.genreIndex.load(), processor.instrumentIndex.load());
+
+    std::vector<FixPanel::Row> rows;
+    int noChange = 0, open = 0;
+    for (auto& is : fs.issues)
+    {
+        FixPanel::Row row;
+        row.range = fmtRange (is);
+        const auto verb = is.action > 0 ? juce::String ("cut") : juce::String ("boost");
+        const auto amt = juce::String (juce::roundToInt (is.amount));
+        const auto label = is.resonance ? juce::String ("ringing in ") + is.label.toLowerCase() : is.label.toLowerCase();
+        const auto moved = juce::String (std::abs (is.latestChange), 1);
+
+        // What to do: specific instructions for special zones, otherwise a plain EQ move.
+        juce::String how;
+        const mm::Zone* zone = (guide != nullptr && juce::isPositiveAndBelow (is.zone, (int) guide->zones.size()))
+                                   ? &guide->zones[(size_t) is.zone] : nullptr;
+        if (is.resonance)
+            how = "Cut " + amt + " dB at " + SpectrumView::formatHz (is.focusHz) + " with a narrow bell (Q 5-8).";
+        else if (zone != nullptr && (zone->label.equalsIgnoreCase ("rumble") || zone->label.equalsIgnoreCase ("low cut")))
+            how = "Add a high-pass filter and raise it to around " + SpectrumView::formatHz (is.highHz) + ".";
+        else if (zone != nullptr && zone->label.equalsIgnoreCase ("sibilance"))
+            how = "Use a de-esser set to around " + SpectrumView::formatHz (is.focusHz) + ".";
+        else if (is.action < 0 && zone != nullptr && zone->tooLittle.containsIgnoreCase ("saturation"))
+            how = "Add saturation, or boost about " + amt + " dB between " + fmtRange (is) + ".";
         else
-        {
-            okZones.add (zone.label);
-        }
+            how = juce::String (is.action > 0 ? "Cut" : "Boost") + " about " + amt + " dB between " + fmtRange (is)
+                + " (centre ~" + SpectrumView::formatHz (is.focusHz) + ") with a wide bell.";
 
-        if (r.resonanceHz > 0.0f)
+        switch (is.status)
         {
-            values.set ("hz", SpectrumView::formatHz (r.resonanceHz));
-            values.set ("res", juce::String (r.resonanceDb, 0));
-            problems.push_back ({ r.resonanceDb - 6.0f, { SpectrumView::colourForStatus (1),
-                "ringing resonance in " + zone.label.toLowerCase(),
-                fillTemplate ("One narrow frequency sticks out about {res} dB in the {label} zone. "
-                              "Cut 3-5 dB at {hz} with a narrow bell (Q 5-8). Tip: sweep a narrow boost "
-                              "to hear it ring, then turn the boost into a cut.", values),
-                SpectrumView::formatHz (r.resonanceHz), "+" + juce::String (juce::roundToInt (r.resonanceDb)) + " dB peak" } });
+            case 1:
+                row.state = 3;
+                row.title = label + (fs.checks > 0 ? "  (moved " + moved + " dB)" : juce::String());
+                break;
+            case 2:
+                row.state = 5; ++open;
+                row.chip = verb + " a bit more";
+                row.title = label + ": better, moved " + moved + " dB";
+                row.body = "Going the right way. Push a little further, then re-check.";
+                break;
+            case 3:
+                row.state = 6; ++open; ++noChange;
+                row.chip = verb + " ~" + amt + " dB";
+                row.title = label + ": no change heard";
+                row.body = "I didn't hear a change here. Is your EQ band between " + fmtRange (is)
+                         + "? Is Mix Mentor after your EQ? " + how;
+                break;
+            case 4:
+                row.state = 7; ++open;
+                row.chip = verb + " ~" + amt + " dB";
+                row.title = label + ": went the wrong way (" + moved + " dB)";
+                row.body = how;
+                break;
+            default:
+                row.state = is.action > 0 ? 1 : 2; ++open;
+                row.chip = verb + " ~" + amt + " dB";
+                row.title = label + (is.action > 0 ? ": too much" : ": too little");
+                row.body = how + " Then press re-check.";
+                break;
+        }
+        rows.push_back (row);
+
+        // Mark the zone on the analyzer (open issues win over fixed ones in the same zone)
+        if (juce::isPositiveAndBelow (is.zone, (int) zoneMarks.size()))
+        {
+            auto& m = zoneMarks[(size_t) is.zone];
+            if (m.state == 0 || m.state == 3)
+            {
+                m.state = row.state;
+                m.text = row.state == 3 ? "fixed" : row.state == 6 ? "no change" : row.state == 7 ? "worse"
+                       : row.state == 5 ? "a bit more" : verb + " ~" + amt + " dB";
+            }
         }
     }
 
-    std::sort (problems.begin(), problems.end(), [] (auto& a, auto& b) { return a.severity > b.severity; });
+    const auto& zones = spectrum.getZones();
+    for (size_t z = 0; z < zones.size(); ++z)
+        if (zoneMarks[z].state == 0 && fs.goodZones.contains (zones[z].label.toLowerCase()))
+            zoneMarks[z] = { 4, "ok" };
 
-    std::vector<AdvicePanel::Item> items;
-    for (auto& p : problems)
-        items.push_back (p.item);
+    juce::String warning;
+    if (fs.checks > 0 && open > 0 && noChange == open)
+        warning = "I didn't hear any of your changes. Mix Mentor must be the LAST plugin on this track, "
+                  "after your EQ, and the same part of the song should be playing.";
 
-    if (problems.empty())
-        items.push_back ({ SpectrumView::colourForStatus (0), "sounding balanced for " + gName.toLowerCase(),
-                           "Every zone is inside the typical range for a " + gName + " " + instrumentName
-                               + ". Now judge it in the full mix: does it sit well next to the other elements?", {}, {} });
-    else if (! okZones.isEmpty())
-        items.push_back ({ SpectrumView::colourForStatus (0), "looks good: " + okZones.joinIntoString (", ").toLowerCase(),
-                           "Leave these alone for now.", {}, {} });
+    juce::String good = fs.goodZones.joinIntoString (", ") + ".";
+    if (fs.issues.empty())
+        good = "every range is inside the typical range for this genre and instrument (" + fs.goodZones.joinIntoString (", ") + ").";
 
-    advice.setItems (std::move (items), true, (int) problems.size());
+    fixPanel.setContent (2, 0.0f, rows, good, warning, open > 0);
+    spectrum.setZoneMarks (zoneMarks);
 }
 
 void MixMentorEditor::timerCallback()
@@ -1025,6 +1277,8 @@ void MixMentorEditor::timerCallback()
 
     updateGainStatus();
 
-    if (++frameCounter % 15 == 0)    // advice twice a second, so it doesn't flicker
-        updateAdvice();
+    if (spectrum.takeCaptureResult())
+        captureFinished();
+    else if (spectrum.isCapturing() && ++frameCounter % 5 == 0)
+        refreshFixPanel();   // progress bar
 }

@@ -1,4 +1,8 @@
 #include "LevelMeter.h"
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <vector>
 #include "Theme.h"
 
 void LevelMeter::setLevels (float peakDb, float holdDb, float rmsDb)

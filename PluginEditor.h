@@ -71,24 +71,35 @@ private:
     bool guide = false;
 };
 
-/** Right-hand panel: the problem frequencies the analyzer hears right now, worst first, with the fix. */
-class AdvicePanel : public juce::Component
+/** Right-hand panel: the fix list. "analyse" freezes a list of ranges to cut or boost;
+    "re-check" listens again and marks each one fixed (or tells you it heard no change). */
+class FixPanel : public juce::Component
 {
 public:
-    struct Item
+    struct Row
     {
-        juce::Colour colour;
-        juce::String title, body;
-        juce::String freq, amount;   // e.g. "310 Hz", "+4.2 dB" (empty for info items)
+        int state = 0;              // same codes as ZoneMark
+        juce::String range;         // "200-400 Hz" or "310 Hz"
+        juce::String chip;          // "cut ~3 dB"
+        juce::String title;         // zone name + status
+        juce::String body;          // what to do / what happened
     };
 
-    void setItems (std::vector<Item> newItems, bool isLive, int issueCount = 0);
+    FixPanel();
+    /** mode 0 = nothing analysed yet, 1 = listening, 2 = showing the list. */
+    void setContent (int mode, float progress, std::vector<Row> rows, const juce::String& good,
+                     const juce::String& warning, bool canRecheck);
+    std::function<void()> onAnalyse, onStartOver;
+
     void paint (juce::Graphics&) override;
+    void resized() override;
 
 private:
-    std::vector<Item> items;
-    bool live = false;
-    int issues = 0;
+    juce::TextButton analyseButton { "analyse" }, startOverButton { "start over" };
+    int mode = 0;
+    float progress = 0.0f;
+    std::vector<Row> rows;
+    juce::String goodText, warningText;
 };
 
 /** The genre's 30-step workflow as a checklist. Click a step to tick it off. */
@@ -126,7 +137,12 @@ private:
     void timerCallback() override;
     void refreshContent();
     void updateGainStatus();
-    void updateAdvice();
+    void startCapture (int kind);
+    void captureFinished();
+    void buildFixList();
+    void recheckFixList();
+    void refreshFixPanel();
+    bool fixListMatchesSettings() const;
     bool isWorkflowTab() const;
     bool isTheoryTab() const;
     juce::uint32 workflowBits() const;
@@ -135,14 +151,15 @@ private:
     juce::SharedResourcePointer<theme::LookAndFeel> lookAndFeel;
 
     juce::ComboBox genreBox, instrumentBox;
-    juce::TextButton relistenButton { "re-listen" }, guideButton { "?" };
+    juce::TextButton guideButton { "?" };
     SpectrumView spectrum;
     GainGauge gauge { processor.parameters };
     SegmentedControl processTabs;
     juce::TextEditor tipText;
     WorkflowList workflow;
     juce::Viewport workflowView;
-    AdvicePanel advice;
+    FixPanel fixPanel;
+    int captureKind = 0;   // 1 = analyse, 2 = re-check
     GenrePicker picker;
     juce::TooltipWindow tooltipWindow { this, 350 };
 

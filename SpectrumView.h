@@ -13,11 +13,20 @@ struct ZoneReading
     float peakHz = 0.0f;        // loudest frequency inside the zone
     float resonanceHz = 0.0f;   // narrow ringing peak, 0 if none
     float resonanceDb = 0.0f;   // how far that peak sticks out
+    float bumpDb = 0.0f;        // how far the zone sticks out (+) or dips (-) compared with its neighbours
     int status = 0;             // +1 too much, -1 too little, 0 OK
 };
 
-/** Real-time spectrum analyzer. Draws the genre's frequency zones and, while audio plays,
-    measures each zone against its target range. Hovering a zone shows its tip as a tooltip. */
+/** What the fix list wants shown on a zone's label. */
+struct ZoneMark
+{
+    int state = 0;          // 0 nothing, 1 cut to do, 2 boost to do, 3 fixed, 4 ok, 5 improved, 6 no change, 7 worse
+    juce::String text;
+};
+
+/** Real-time spectrum analyzer with the genre's frequency zones. "Analyse" listens for a few
+    seconds and freezes a snapshot (the white line), which the fix list is built from.
+    Hovering a zone shows its tip as a tooltip. */
 class SpectrumView : public juce::Component,
                      public juce::TooltipClient
 {
@@ -28,14 +37,21 @@ public:
     void updateSpectrum (double sampleRate, bool hasSignal);   // call from a GUI timer
     void setZones (std::vector<mm::Zone> newZones);
 
-    /** True once enough audio has been heard to judge the zones. */
-    bool hasReadings() const { return signalFrames >= framesNeeded; }
-    float getListeningProgress() const { return juce::jmin (1.0f, (float) signalFrames / (float) framesNeeded); }
+    /** Listen for this many seconds of playing audio, then freeze a snapshot. */
+    void startCapture (float seconds);
+    bool isCapturing() const { return capturing; }
+    float getCaptureProgress() const { return captureTarget > 0 ? juce::jmin (1.0f, (float) captureFrames / (float) captureTarget) : 0.0f; }
+    /** Returns true once, when a capture has just finished. */
+    bool takeCaptureResult() { const bool r = captureDone; captureDone = false; return r; }
+    bool hasReadings() const { return hasSnapshot; }
+
     const std::vector<mm::Zone>& getZones() const { return zones; }
     const std::vector<ZoneReading>& getReadings() const { return readings; }
     float getReferenceDb() const { return referenceDb; }
 
-    /** Forget the averaged spectrum, e.g. after switching to a different sound. */
+    void setZoneMarks (std::vector<ZoneMark> marks);
+
+    /** Forget the snapshot. */
     void resetAnalysis();
 
     void paint (juce::Graphics&) override;
@@ -53,7 +69,6 @@ private:
     static constexpr int fftSize = 1 << fftOrder;
     static constexpr float minHz = 20.0f, maxHz = 20000.0f;
     static constexpr float minDb = -90.0f, maxDb = 0.0f;
-    static constexpr int framesNeeded = 45;   // ~1.5 s of audio at 30 fps
 
     float xForFreq (float hz) const;
     float freqForX (float x) const;
@@ -73,11 +88,12 @@ private:
     std::vector<float> smoothedDb = std::vector<float> ((size_t) fftSize / 2, minDb);
     std::vector<double> averagedPower = std::vector<double> ((size_t) fftSize / 2, 0.0);
     double lastSampleRate = 44100.0;
-    int signalFrames = 0;
+    bool capturing = false, captureDone = false, hasSnapshot = false;
+    int captureFrames = 0, captureTarget = 120;
+    std::vector<ZoneMark> marks;
 
     std::vector<mm::Zone> zones;
     std::vector<ZoneReading> readings;
     float referenceDb = -60.0f, floorDb = -200.0f;
-    std::vector<int> previousStatus;
     int hoveredZone = -1;
 };

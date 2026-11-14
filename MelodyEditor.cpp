@@ -1,4 +1,8 @@
 #include "MelodyEditor.h"
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <vector>
 #include "KnowledgeBase.h"
 
 using namespace theme;
