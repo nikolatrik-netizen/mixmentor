@@ -71,7 +71,7 @@ private:
     bool guide = false;
 };
 
-/** The "live advice" list: what to do right now, based on what the analyzer hears. */
+/** Right-hand panel: the problem frequencies the analyzer hears right now, worst first, with the fix. */
 class AdvicePanel : public juce::Component
 {
 public:
@@ -79,14 +79,16 @@ public:
     {
         juce::Colour colour;
         juce::String title, body;
+        juce::String freq, amount;   // e.g. "310 Hz", "+4.2 dB" (empty for info items)
     };
 
-    void setItems (std::vector<Item> newItems, bool isLive);
+    void setItems (std::vector<Item> newItems, bool isLive, int issueCount = 0);
     void paint (juce::Graphics&) override;
 
 private:
     std::vector<Item> items;
     bool live = false;
+    int issues = 0;
 };
 
 /** The genre's 30-step workflow as a checklist. Click a step to tick it off. */

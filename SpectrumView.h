@@ -77,6 +77,7 @@ private:
 
     std::vector<mm::Zone> zones;
     std::vector<ZoneReading> readings;
-    float referenceDb = -60.0f;
+    float referenceDb = -60.0f, floorDb = -200.0f;
+    std::vector<int> previousStatus;
     int hoveredZone = -1;
 };

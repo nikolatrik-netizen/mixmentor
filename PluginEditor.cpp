@@ -185,7 +185,7 @@ GainGauge::GainGauge (juce::AudioProcessorValueTreeState& params)
     knob.setRotaryParameters (juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
     knob.setDoubleClickReturnValue (true, 0.0);
     knob.setMouseDragSensitivity (220);
-    knob.setTooltip ("Trim\nTurns this track's level up or down (+/-24 dB) before the rest of your chain. "
+    knob.setTooltip ("Trim\nTurns this track's level up or down (+/-24 dB) after your processing, so it reaches the mix at the right level. "
                      "Drag up/down, double-click to reset to 0 dB. You can automate it in your DAW.");
     addAndMakeVisible (knob);
     attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (params, "trim", knob);
@@ -295,51 +295,94 @@ void GainGauge::paint (juce::Graphics& g)
 }
 
 //==============================================================================
-void AdvicePanel::setItems (std::vector<Item> newItems, bool isLive)
+void AdvicePanel::setItems (std::vector<Item> newItems, bool isLive, int issueCount)
 {
     items = std::move (newItems);
     live = isLive;
+    issues = issueCount;
     repaint();
 }
 
 void AdvicePanel::paint (juce::Graphics& g)
 {
-    drawPanel (g, getLocalBounds().toFloat());
-    auto area = getLocalBounds().toFloat().reduced (18.0f, 14.0f);
+    drawPanel (g, getLocalBounds().toFloat(), col::panel, 0.0f);
+    auto area = getLocalBounds().toFloat().reduced (16.0f, 14.0f);
 
+    // Header: title + issue count / live badge
     auto top = area.removeFromTop (18.0f);
-    drawLabel (g, "live advice", top);
+    drawLabel (g, "problem frequencies", top);
     if (live)
     {
-        const auto badge = top.removeFromRight (50.0f);
-        g.setColour (col::good);
-        g.fillEllipse (badge.getX() + 8.0f, badge.getCentreY() - 3.5f, 7.0f, 7.0f);
-        g.setFont (font (12.0f));
-        g.setColour (col::textDim);
-        g.drawText ("live", badge.withTrimmedLeft (20.0f), juce::Justification::centredLeft, false);
+        const auto txt = issues == 0 ? juce::String ("all clear") : juce::String (issues) + (issues == 1 ? " issue" : " issues");
+        const auto c = issues == 0 ? col::good : col::accent;
+        g.setFont (font (12.0f, true));
+        const float w = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), txt) + 22.0f;
+        const auto badge = top.removeFromRight (w).withSizeKeepingCentre (w, 18.0f);
+        g.setColour (c.withAlpha (0.15f));
+        g.fillRoundedRectangle (badge, 9.0f);
+        g.setColour (c);
+        g.fillEllipse (badge.getX() + 7.0f, badge.getCentreY() - 3.0f, 6.0f, 6.0f);
+        g.drawText (txt, badge.withTrimmedLeft (16.0f), juce::Justification::centredLeft, false);
     }
     area.removeFromTop (12.0f);
 
     for (auto& item : items)
     {
-        if (area.getHeight() < 30.0f)
+        if (area.getHeight() < 40.0f)
             break;
 
-        juce::AttributedString text;
-        text.setWordWrap (juce::AttributedString::byWord);
-        text.append (item.title + "\n", font (14.0f, true), col::text);
-        text.append (item.body, font (13.0f), col::textDim);
-        text.setLineSpacing (2.0f);
+        const bool isIssue = item.freq.isNotEmpty();
 
+        juce::AttributedString body;
+        body.setWordWrap (juce::AttributedString::byWord);
+        body.append (item.body, font (12.5f), col::textDim);
+        body.setLineSpacing (1.5f);
         juce::TextLayout layout;
-        layout.createLayout (text, area.getWidth() - 18.0f);
-        const float h = juce::jmin (layout.getHeight(), area.getHeight());
+        layout.createLayout (body, area.getWidth() - 14.0f);
 
+        const float headH = isIssue ? 40.0f : 20.0f;
+        const float h = juce::jmin (headH + layout.getHeight() + 14.0f, area.getHeight());
+        auto card = area.removeFromTop (h);
+        area.removeFromTop (8.0f);
+
+        if (isIssue)
+        {
+            g.setColour (col::box.withAlpha (0.6f));
+            g.fillRoundedRectangle (card, 5.0f);
+        }
         g.setColour (item.colour);
-        g.fillEllipse (area.getX(), area.getY() + 4.0f, 9.0f, 9.0f);
-        layout.draw (g, area.withTrimmedLeft (18.0f).withHeight (h));
+        g.fillRoundedRectangle (card.getX(), card.getY() + 6.0f, 3.0f, card.getHeight() - 12.0f, 1.5f);
 
-        area.removeFromTop (h + 16.0f);
+        auto inner = card.reduced (14.0f, 7.0f).withTrimmedLeft (0.0f);
+        if (isIssue)
+        {
+            // Big frequency read-out + amount chip, then the zone name
+            auto row = inner.removeFromTop (22.0f);
+            g.setColour (col::text);
+            g.setFont (font (18.0f, true));
+            g.drawText (item.freq, row, juce::Justification::centredLeft, false);
+
+            g.setFont (font (12.0f, true));
+            const float cw = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), item.amount) + 14.0f;
+            const auto chip = row.removeFromRight (cw).withSizeKeepingCentre (cw, 18.0f);
+            g.setColour (item.colour.withAlpha (0.16f));
+            g.fillRoundedRectangle (chip, 9.0f);
+            g.setColour (item.colour);
+            g.drawText (item.amount, chip, juce::Justification::centred, false);
+
+            g.setColour (col::textDim);
+            g.setFont (font (12.5f, true));
+            g.drawText (item.title, inner.removeFromTop (16.0f), juce::Justification::centredLeft, true);
+            inner.removeFromTop (4.0f);
+        }
+        else
+        {
+            g.setColour (col::text);
+            g.setFont (font (13.5f, true));
+            g.drawText (item.title, inner.removeFromTop (18.0f), juce::Justification::centredLeft, true);
+            inner.removeFromTop (2.0f);
+        }
+        layout.draw (g, inner);
     }
 }
 
@@ -525,7 +568,9 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
                             "Blue area: the live sound.\n"
                             "Dashed boxes: the target range for your genre and instrument.\n"
                             "Coloured bars: where each zone measures now (green ok, red too much, orange too little).\n\n"
-                            "Hover a zone for its tip.");
+                            "Hover a zone for its tip.\n\n"
+                            "Put Mix Mentor last on the track (after your EQ and compressor), "
+                            "otherwise it can't hear your changes.");
     addAndMakeVisible (guideButton);
 
     addAndMakeVisible (spectrum);
@@ -588,8 +633,8 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
     addChildComponent (picker);
 
     setResizable (true, true);
-    setResizeLimits (1060, 720, 1900, 1300);
-    setSize (1180, 800);
+    setResizeLimits (1200, 720, 2000, 1300);
+    setSize (1320, 800);
 
     refreshContent();
     startTimerHz (30);
@@ -634,14 +679,16 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.fillRect (sidebar.getRight() - 1, 0, 1, getHeight());
 
     auto s = sidebar.toFloat().reduced (22.0f, 0.0f);
+    drawLogoMark (g, juce::Rectangle<float> (s.getX(), 22.0f, 52.0f, 52.0f));
     g.setColour (col::text);
-    g.setFont (fontLight (36.0f));
-    g.drawText ("mix mentor", s.withY (18.0f).withHeight (44.0f), juce::Justification::centredLeft, false);
+    g.setFont (fontLight (29.0f));
+    g.drawText ("mix mentor", s.withTrimmedLeft (64.0f).withY (22.0f).withHeight (34.0f), juce::Justification::centredLeft, false);
+    const float wordW = (float) juce::GlyphArrangement::getStringWidthInt (juce::Font (fontLight (29.0f)), "mix mentor");
     g.setColour (col::accent);
-    g.fillEllipse (s.getX() + 186.0f, 46.0f, 7.0f, 7.0f);
+    g.fillEllipse (s.getX() + 64.0f + wordW + 5.0f, 44.0f, 6.0f, 6.0f);
     g.setColour (col::textFaint);
-    g.setFont (font (11.5f));
-    g.drawText ("learn while you mix   v0.4", s.withY (60.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
+    g.setFont (font (11.0f));
+    g.drawText ("learn while you mix   v0.6", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
 
     g.setColour (col::border.withAlpha (0.6f));
     g.fillRect (s.getX(), 94.0f, s.getWidth(), 1.0f);
@@ -761,18 +808,17 @@ void MixMentorEditor::resized()
         relistenButton.setBounds (tb.removeFromRight (90));
     }
 
-    spectrum.setBounds (area.removeFromTop ((int) (area.getHeight() * 0.53f)));
+    auto upper = area.removeFromTop ((int) (area.getHeight() * 0.55f));
+    advice.setBounds (upper.removeFromRight (320));
+    spectrum.setBounds (upper);
 
     area = area.reduced (16, 14);
     processTabs.setBounds (area.removeFromTop (36));
     area.removeFromTop (12);
-
-    auto adviceArea = area.removeFromRight ((int) (area.getWidth() * 0.44f));
-    area.removeFromRight (12);
-    advice.setBounds (adviceArea);
     guidePanel = area;
 
-    const auto content = guidePanel.reduced (18, 14).withTrimmedTop (18 + 8 + 24 + 10);
+    auto content = guidePanel.reduced (18, 14).withTrimmedTop (18 + 8 + 24 + 10);
+    content = content.withWidth (juce::jmin (content.getWidth(), 880));   // keep lines readable
     tipText.setBounds (content);
     workflowView.setBounds (content.withTrimmedRight (-10));
     workflow.setWidthAndLayout (content.getWidth() - 4);
@@ -872,9 +918,9 @@ void MixMentorEditor::updateAdvice()
 
     if (! spectrum.hasReadings())
     {
-        advice.setItems ({ { grey, "Listening...",
-                             "Play the track (solo it for the most accurate advice). "
-                             "Advice appears after about 2 seconds of sound and updates as you tweak your plugins." } }, false);
+        advice.setItems ({ { grey, "listening...",
+                             "Play the track (solo it for the most accurate advice). Put Mix Mentor LAST on the track, "
+                             "after your EQ and compressor, so it hears your changes. Advice appears after about 2 seconds.", {}, {} } }, false);
         return;
     }
 
@@ -898,7 +944,7 @@ void MixMentorEditor::updateAdvice()
         values.set ("genre", gName);
         values.set ("instrument", instrumentName);
         values.set ("dev", juce::String (dev, 1));
-        values.set ("amt", juce::String (juce::jlimit (1, 6, (int) std::round (dev) + 1)));
+        values.set ("amt", juce::String (juce::jlimit (1, 6, (int) std::round (dev))));
         values.set ("hz", SpectrumView::formatHz (r.peakHz));
         values.set ("lo", SpectrumView::formatHz (zone.lowHz));
         values.set ("hi", SpectrumView::formatHz (zone.highHz));
@@ -907,19 +953,21 @@ void MixMentorEditor::updateAdvice()
         {
             const auto tmpl = zone.tooMuch.isNotEmpty() ? zone.tooMuch
                 : juce::String ("There's {dev} dB more {label} than typical for a {genre} {instrument}. "
-                                "Cut about {amt} dB around {hz} with a medium-wide bell (Q 1-2), then compare with bypass.");
+                                "Cut about {amt} dB around {hz} with a medium-wide bell (Q 1-2), then give it a second to re-measure.");
             problems.push_back ({ dev, { SpectrumView::colourForStatus (1),
-                                         zone.label + ": too much (+" + juce::String (dev, 1) + " dB)",
-                                         fillTemplate (tmpl, values) } });
+                                         zone.label.toLowerCase() + juce::String::fromUTF8 ("  \xe2\x80\x94  too much"),
+                                         fillTemplate (tmpl, values),
+                                         SpectrumView::formatHz (r.peakHz), "+" + juce::String (dev, 1) + " dB" } });
         }
         else if (r.status < 0)
         {
             const auto tmpl = zone.tooLittle.isNotEmpty() ? zone.tooLittle
                 : juce::String ("There's {dev} dB less {label} than typical for a {genre} {instrument}. "
-                                "Boost about {amt} dB around {hz} with a wide bell (Q 0.7-1.5).");
+                                "Boost about {amt} dB around {hz} with a wide bell (Q 0.7-1.5), then give it a second to re-measure.");
             problems.push_back ({ dev, { SpectrumView::colourForStatus (-1),
-                                         zone.label + ": too little (-" + juce::String (dev, 1) + " dB)",
-                                         fillTemplate (tmpl, values) } });
+                                         zone.label.toLowerCase() + juce::String::fromUTF8 ("  \xe2\x80\x94  too little"),
+                                         fillTemplate (tmpl, values),
+                                         SpectrumView::formatHz (r.peakHz), "-" + juce::String (dev, 1) + " dB" } });
         }
         else
         {
@@ -931,10 +979,11 @@ void MixMentorEditor::updateAdvice()
             values.set ("hz", SpectrumView::formatHz (r.resonanceHz));
             values.set ("res", juce::String (r.resonanceDb, 0));
             problems.push_back ({ r.resonanceDb - 6.0f, { SpectrumView::colourForStatus (1),
-                "Ringing frequency at " + SpectrumView::formatHz (r.resonanceHz),
+                "ringing resonance in " + zone.label.toLowerCase(),
                 fillTemplate ("One narrow frequency sticks out about {res} dB in the {label} zone. "
                               "Cut 3-5 dB at {hz} with a narrow bell (Q 5-8). Tip: sweep a narrow boost "
-                              "to hear it ring, then turn the boost into a cut.", values) } });
+                              "to hear it ring, then turn the boost into a cut.", values),
+                SpectrumView::formatHz (r.resonanceHz), "+" + juce::String (juce::roundToInt (r.resonanceDb)) + " dB peak" } });
         }
     }
 
@@ -945,14 +994,14 @@ void MixMentorEditor::updateAdvice()
         items.push_back (p.item);
 
     if (problems.empty())
-        items.push_back ({ SpectrumView::colourForStatus (0), "Sounding balanced for " + gName,
+        items.push_back ({ SpectrumView::colourForStatus (0), "sounding balanced for " + gName.toLowerCase(),
                            "Every zone is inside the typical range for a " + gName + " " + instrumentName
-                               + ". Now judge it in the full mix: does it sit well next to the other elements?" });
+                               + ". Now judge it in the full mix: does it sit well next to the other elements?", {}, {} });
     else if (! okZones.isEmpty())
-        items.push_back ({ SpectrumView::colourForStatus (0), "Looks good: " + okZones.joinIntoString (", "),
-                           "Leave these alone for now." });
+        items.push_back ({ SpectrumView::colourForStatus (0), "looks good: " + okZones.joinIntoString (", ").toLowerCase(),
+                           "Leave these alone for now.", {}, {} });
 
-    advice.setItems (std::move (items), true);
+    advice.setItems (std::move (items), true, (int) problems.size());
 }
 
 void MixMentorEditor::timerCallback()

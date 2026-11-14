@@ -25,6 +25,61 @@ namespace theme
         return juce::FontOptions (lightFace()).withHeight (height);
     }
 
+    void drawLogoMark (juce::Graphics& g, juce::Rectangle<float> area, bool withNote)
+    {
+        // Designed on a 120 x 120 grid, scaled to the area.
+        const float sz = juce::jmin (area.getWidth(), area.getHeight());
+        const auto box = area.withSizeKeepingCentre (sz, sz);
+        const float k = sz / 120.0f;
+        auto pt = [&] (float x, float y) { return juce::Point<float> (box.getX() + x * k, box.getY() + y * k); };
+        const bool small = sz < 40.0f;   // thicker strokes at small sizes so it stays readable
+
+        // Tile
+        g.setColour (juce::Colour (0xff17191d));
+        g.fillRoundedRectangle (box.reduced (2.0f * k), 30.0f * k);
+        g.setColour (juce::Colour (0xff2c3036));
+        g.drawRoundedRectangle (box.reduced (2.0f * k), 30.0f * k, juce::jmax (1.0f, 2.0f * k));
+
+        // The M: two EQ bells
+        juce::Path m;
+        m.startNewSubPath (pt (22, 88));
+        m.cubicTo (pt (33, 88), pt (35, 33), pt (44, 33));
+        m.cubicTo (pt (53, 33), pt (54, 64), pt (60, 64));
+        m.cubicTo (pt (66, 64), pt (67, 33), pt (76, 33));
+        m.cubicTo (pt (85, 33), pt (87, 88), pt (98, 88));
+        g.setColour (col::text);
+        g.strokePath (m, juce::PathStrokeType ((small ? 11.0f : 8.0f) * k, juce::PathStrokeType::curved,
+                                               juce::PathStrokeType::rounded));
+
+        if (! withNote)
+        {
+            // Amber band node on the first peak
+            const float r = (small ? 12.0f : 9.0f) * k;
+            g.setColour (juce::Colour (0xff17191d));
+            g.fillEllipse (juce::Rectangle<float> (2.0f * (r + 4.0f * k), 2.0f * (r + 4.0f * k)).withCentre (pt (44, 33)));
+            g.setColour (col::accent);
+            g.fillEllipse (juce::Rectangle<float> (2.0f * r, 2.0f * r).withCentre (pt (44, 33)));
+        }
+        else
+        {
+            // Amber eighth note sitting on the first peak
+            juce::Path head;
+            head.addEllipse (-9.0f, -7.0f, 18.0f, 14.0f);
+            head.applyTransform (juce::AffineTransform::rotation (juce::degreesToRadians (-20.0f))
+                                     .scaled (k).translated (pt (40, 36)));
+            g.setColour (juce::Colour (0xff17191d));
+            g.strokePath (head, juce::PathStrokeType (3.0f * k));
+            g.setColour (col::accent);
+            g.fillPath (head);
+
+            juce::Path stem;
+            stem.startNewSubPath (pt (48, 34));
+            stem.lineTo (pt (48, 12));
+            stem.quadraticTo (pt (55, 15), pt (60, 24));
+            g.strokePath (stem, juce::PathStrokeType (4.0f * k, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+    }
+
     void drawPanel (juce::Graphics& g, juce::Rectangle<float> area, juce::Colour fill, float radius)
     {
         g.setColour (fill);

@@ -193,10 +193,9 @@
        "tip": "The kick's weight. In trap the 808 often owns the deep sub, so keep the kick's energy here and let the 808 sit around or below it.",
        "target": [
         4,
-        20
+        60
        ],
-       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
-       "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
        "lo": 200,
@@ -293,10 +292,9 @@
        "tip": "The 808's fundamental. Felt more than heard. Check it on headphones or a sub: laptop speakers can't play it.",
        "target": [
         4,
-        22
+        60
        ],
-       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
-       "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
        "lo": 150,
@@ -1056,9 +1054,8 @@
        "tip": "Soft, round weight. Lo-fi kicks are warm, not hard.",
        "target": [
         2,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -1156,9 +1153,8 @@
        "tip": "Muted, round bass notes. Warm but not boomy.",
        "target": [
         2,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -1890,10 +1886,9 @@
        "tip": "Body of the kick. Boost moderately; pop needs a tight kick, not a huge sub.",
        "target": [
         4,
-        20
+        60
        ],
-       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
-       "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
        "lo": 250,
@@ -1990,10 +1985,9 @@
        "tip": "Weight of the bass notes. Should feel solid but not boomy.",
        "target": [
         4,
-        22
+        60
        ],
-       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
-       "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
        "lo": 200,
@@ -2736,10 +2730,9 @@
        "tip": "The kick's fundamental, the engine of the track. Keep it clean; carve the bass around it.",
        "target": [
         4,
-        20
+        60
        ],
-       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
-       "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
        "lo": 250,
@@ -2836,10 +2829,9 @@
        "tip": "Keep it mono. If it clashes with the kick's fundamental, sidechain or dip it.",
        "target": [
         4,
-        22
+        60
        ],
-       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
-       "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+       "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
        "lo": 100,
@@ -3594,9 +3586,8 @@
        "tip": "Kick weight. Short and tight so the rolling sub moves around it.",
        "target": [
         4,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -3694,9 +3685,8 @@
        "tip": "The rolling sub: the heartbeat of garage. Mono, moving, clean.",
        "target": [
         4,
-        20
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -4435,9 +4425,8 @@
        "tip": "The engine of the track. Clean and powerful.",
        "target": [
         4,
-        20
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -4535,9 +4524,8 @@
        "tip": "Rumble bass. Felt pressure that moves with the kick. Keep it mono.",
        "target": [
         2,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -5276,9 +5264,8 @@
        "tip": "Clean, tight kick weight. Short tail so the rolling bass fits between hits.",
        "target": [
         4,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -5376,9 +5363,8 @@
        "tip": "Rolling bass fundamental. Mono and tight.",
        "target": [
         4,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -6122,9 +6108,8 @@
        "tip": "Body of the kick. In DnB it's tight and short so it doesn't smear the sub at 170 BPM.",
        "target": [
         4,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -6222,9 +6207,8 @@
        "tip": "The clean sine sub. Keep it mono and on its own layer, separate from the reese.",
        "target": [
         4,
-        20
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -6963,9 +6947,8 @@
        "tip": "Kick weight. In half-time it has space to be big, but leave the deep sub for the bass anchor.",
        "target": [
         4,
-        20
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -7063,9 +7046,8 @@
        "tip": "Clean sine sub. Mono, steady, separate from the growls.",
        "target": [
         4,
-        20
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -7804,9 +7786,8 @@
        "tip": "Kick weight. Keep it punchy but not huge; the chords carry the drop.",
        "target": [
         4,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -7904,9 +7885,8 @@
        "tip": "Sub support under the chords. Usually a sine following the chord roots.",
        "target": [
         4,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -8645,9 +8625,8 @@
        "tip": "Weight of a soft kick or cinematic impact. Felt more than heard; keep it gentle.",
        "target": [
         0,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {
@@ -8745,9 +8724,8 @@
        "tip": "The low-end foundation. Restraint is key: a little goes a long way.",
        "target": [
         0,
-        18
+        60
        ],
-       "tooMuch": "Too much low end for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or bass.",
        "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight."
       },
       {

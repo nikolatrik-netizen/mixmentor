@@ -35,6 +35,10 @@ namespace theme
     juce::FontOptions font (float height, bool semibold = false);
     juce::FontOptions fontLight (float height);
 
+    /** The Mix Mentor logo mark (the "EQ peak M") drawn into a square area.
+        withNote = the Mix Mentor Melody version, with a music note on the first peak. */
+    void drawLogoMark (juce::Graphics&, juce::Rectangle<float> area, bool withNote = false);
+
     /** Soft rounded panel. */
     void drawPanel (juce::Graphics&, juce::Rectangle<float> area, juce::Colour fill = col::panel, float radius = 6.0f);
 

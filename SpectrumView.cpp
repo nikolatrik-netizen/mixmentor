@@ -68,7 +68,7 @@ void SpectrumView::updateSpectrum (double sampleRate, bool hasSignal)
 
     // Long-term average (~2 s), only updated while audio is actually playing,
     // so silence between kick hits or song sections doesn't skew the judgement.
-    constexpr double keep = 0.98;
+    constexpr double keep = 0.95;   // ~0.7 s time constant: reacts to your EQ moves within a second or two
 
     for (size_t bin = 1; bin < smoothedDb.size(); ++bin)
     {
@@ -102,16 +102,27 @@ float SpectrumView::averagedDbAt (float hz) const
 
 void SpectrumView::computeReadings()
 {
+    previousStatus.clear();
+    for (auto& r : readings)
+        previousStatus.push_back (r.status);
     readings.assign (zones.size(), {});
     if (! hasReadings())
         return;
 
     // The track's overall average level (30 Hz - 16 kHz), used as the reference
     // every zone is compared with. This makes the analysis independent of volume.
+    // Frequencies far below the loudest part (e.g. the empty top end of a clean kick) are
+    // clamped to a floor, otherwise near-silence drags the reference down and every zone
+    // looks massively "too loud" no matter how much you cut.
     constexpr int refPoints = 64;
+    float spectrumMax = -400.0f;
+    for (int i = 0; i < refPoints; ++i)
+        spectrumMax = juce::jmax (spectrumMax, averagedDbAt (30.0f * std::pow (16000.0f / 30.0f, (float) i / (float) (refPoints - 1))));
+    floorDb = spectrumMax - 45.0f;
+
     double sum = 0.0;
     for (int i = 0; i < refPoints; ++i)
-        sum += averagedDbAt (30.0f * std::pow (16000.0f / 30.0f, (float) i / (float) (refPoints - 1)));
+        sum += juce::jmax (floorDb, averagedDbAt (30.0f * std::pow (16000.0f / 30.0f, (float) i / (float) (refPoints - 1))));
     referenceDb = (float) (sum / refPoints);
 
     const float binHz = (float) lastSampleRate / (float) fftSize;
@@ -128,7 +139,7 @@ void SpectrumView::computeReadings()
         for (int i = 0; i < points; ++i)
         {
             const float hz = zone.lowHz * std::pow (zone.highHz / zone.lowHz, (float) i / (float) (points - 1));
-            const float db = averagedDbAt (hz);
+            const float db = juce::jmax (floorDb, averagedDbAt (hz));
             zoneSum += db;
             if (db > peakDb) { peakDb = db; r.peakHz = hz; }
         }
@@ -136,8 +147,15 @@ void SpectrumView::computeReadings()
         r.levelDb = (float) (zoneSum / points);
         r.relativeDb = r.levelDb - referenceDb;
 
-        if (r.relativeDb > zone.targetMaxDb)      { r.status = 1;  r.deviationDb = r.relativeDb - zone.targetMaxDb; }
-        else if (r.relativeDb < zone.targetMinDb) { r.status = -1; r.deviationDb = r.relativeDb - zone.targetMinDb; }
+        // Only flag a zone when it's clearly outside the range (1.5 dB tolerance), and keep
+        // a flag until it's clearly back inside, so the advice doesn't flicker at the edge.
+        const bool wasMuch = juce::isPositiveAndBelow ((int) z, (int) previousStatus.size()) && previousStatus[z] > 0;
+        const bool wasLittle = juce::isPositiveAndBelow ((int) z, (int) previousStatus.size()) && previousStatus[z] < 0;
+        const float muchLimit = zone.targetMaxDb + (wasMuch ? 0.5f : 1.5f);
+        const float littleLimit = zone.targetMinDb - (wasLittle ? 0.5f : 1.5f);
+
+        if (r.relativeDb > muchLimit)        { r.status = 1;  r.deviationDb = r.relativeDb - zone.targetMaxDb; }
+        else if (r.relativeDb < littleLimit) { r.status = -1; r.deviationDb = r.relativeDb - zone.targetMinDb; }
 
         // Resonance: one narrow frequency sticking out well above the rest of the zone.
         // Skipped for low zones (too few FFT bins) and boost zones (a peak there is usually wanted).
