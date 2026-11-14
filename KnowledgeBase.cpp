@@ -51,9 +51,26 @@ namespace mm
                         }
 
                         if (auto* zones = gv["zones"].getArray())
+                        {
                             for (auto& z : *zones)
-                                guide.zones.push_back ({ (float) (double) z["lo"], (float) (double) z["hi"],
-                                                         z["kind"].toString(), z["label"].toString(), z["tip"].toString() });
+                            {
+                                Zone zone;
+                                zone.lowHz  = (float) (double) z["lo"];
+                                zone.highHz = (float) (double) z["hi"];
+                                zone.kind   = z["kind"].toString();
+                                zone.label  = z["label"].toString();
+                                zone.tip    = z["tip"].toString();
+
+                                if (auto* t = z["target"].getArray(); t != nullptr && t->size() == 2)
+                                {
+                                    zone.targetMinDb = (float) (double) t->getReference (0);
+                                    zone.targetMaxDb = (float) (double) t->getReference (1);
+                                }
+                                zone.tooMuch   = z["tooMuch"].toString();
+                                zone.tooLittle = z["tooLittle"].toString();
+                                guide.zones.push_back (zone);
+                            }
+                        }
 
                         if (auto* tipsObj = gv["tips"].getDynamicObject())
                             for (auto& t : tipsObj->getProperties())

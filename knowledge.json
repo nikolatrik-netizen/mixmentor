@@ -1,20 +1,70 @@
 {
   "processes": [
-    { "id": "eq",          "name": "EQ" },
-    { "id": "compression", "name": "Compression" },
-    { "id": "sidechain",   "name": "Sidechain" },
-    { "id": "reverb",      "name": "Reverb" },
-    { "id": "delay",       "name": "Delay" },
-    { "id": "gain",        "name": "Gain Staging" }
+    {
+      "id": "eq",
+      "name": "EQ"
+    },
+    {
+      "id": "compression",
+      "name": "Compression"
+    },
+    {
+      "id": "sidechain",
+      "name": "Sidechain"
+    },
+    {
+      "id": "reverb",
+      "name": "Reverb"
+    },
+    {
+      "id": "delay",
+      "name": "Delay"
+    },
+    {
+      "id": "gain",
+      "name": "Gain Staging"
+    }
   ],
-
   "instruments": [
-    { "id": "kick",  "name": "Kick",           "keywords": ["kick", "kik", "bd", "bassdrum"] },
-    { "id": "snare", "name": "Snare / Clap",   "keywords": ["snare", "snr", "clap", "sd"] },
-    { "id": "bass",  "name": "Bass / 808",     "keywords": ["bass", "808", "sub"] },
-    { "id": "vocal", "name": "Lead Vocal",     "keywords": ["vocal", "vox", "voc"] }
+    {
+      "id": "kick",
+      "name": "Kick",
+      "keywords": [
+        "kick",
+        "kik",
+        "bd",
+        "bassdrum"
+      ]
+    },
+    {
+      "id": "snare",
+      "name": "Snare / Clap",
+      "keywords": [
+        "snare",
+        "snr",
+        "clap",
+        "sd"
+      ]
+    },
+    {
+      "id": "bass",
+      "name": "Bass / 808",
+      "keywords": [
+        "bass",
+        "808",
+        "sub"
+      ]
+    },
+    {
+      "id": "vocal",
+      "name": "Lead Vocal",
+      "keywords": [
+        "vocal",
+        "vox",
+        "voc"
+      ]
+    }
   ],
-
   "genres": [
     {
       "id": "hiphop",
@@ -22,11 +72,46 @@
       "summary": "Low end leads: the kick and 808 dominate, the vocal sits loud and upfront, and the mix is punchy and fairly dry.",
       "guides": {
         "kick": {
-          "peakRange": [-12, -6],
+          "peakRange": [
+            -12,
+            -6
+          ],
           "zones": [
-            { "lo": 45,   "hi": 70,   "kind": "boost", "label": "Thump",       "tip": "The kick's weight. In trap the 808 often owns the deep sub, so keep the kick's energy here and let the 808 sit around or below it." },
-            { "lo": 200,  "hi": 400,  "kind": "cut",   "label": "Boxiness",    "tip": "Cardboard / boxy zone. A narrow 2-4 dB cut here usually cleans the kick up." },
-            { "lo": 3000, "hi": 6000, "kind": "boost", "label": "Click",       "tip": "Beater attack. This is what makes the kick audible on phone speakers. Boost a little if it disappears next to the 808." }
+            {
+              "lo": 45,
+              "hi": 70,
+              "kind": "boost",
+              "label": "Thump",
+              "tip": "The kick's weight. In trap the 808 often owns the deep sub, so keep the kick's energy here and let the 808 sit around or below it.",
+              "target": [
+                4,
+                20
+              ],
+              "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
+              "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+            },
+            {
+              "lo": 200,
+              "hi": 400,
+              "kind": "cut",
+              "label": "Boxiness",
+              "tip": "Cardboard / boxy zone. A narrow 2-4 dB cut here usually cleans the kick up.",
+              "target": [
+                -30,
+                8
+              ]
+            },
+            {
+              "lo": 3000,
+              "hi": 6000,
+              "kind": "boost",
+              "label": "Click",
+              "tip": "Beater attack. This is what makes the kick audible on phone speakers. Boost a little if it disappears next to the 808.",
+              "target": [
+                -12,
+                2
+              ]
+            }
           ],
           "tips": {
             "eq": "High-pass around 25-30 Hz to remove rumble you can't hear.\n\nDecide who owns the sub. If your 808 is long and heavy, keep the kick's energy at 50-80 Hz and its click at 3-5 kHz.\n\nIf it sounds like cardboard, cut 250-400 Hz. Trick: sweep a narrow boost slowly until it sounds ugly, then turn that boost into a cut.",
@@ -38,11 +123,44 @@
           }
         },
         "snare": {
-          "peakRange": [-14, -8],
+          "peakRange": [
+            -14,
+            -8
+          ],
           "zones": [
-            { "lo": 150,  "hi": 250,   "kind": "watch", "label": "Body",   "tip": "Weight of the snare/clap. Boost slightly if it's thin, cut if it's boxy." },
-            { "lo": 2000, "hi": 5000,  "kind": "boost", "label": "Crack",  "tip": "Snap and crack. Trap claps are often bright already, so tame 3-4 kHz if it's piercing." },
-            { "lo": 8000, "hi": 12000, "kind": "watch", "label": "Sizzle", "tip": "Air and sizzle. A gentle high shelf adds shine; too much gets brittle." }
+            {
+              "lo": 150,
+              "hi": 250,
+              "kind": "watch",
+              "label": "Body",
+              "tip": "Weight of the snare/clap. Boost slightly if it's thin, cut if it's boxy.",
+              "target": [
+                -8,
+                8
+              ]
+            },
+            {
+              "lo": 2000,
+              "hi": 5000,
+              "kind": "boost",
+              "label": "Crack",
+              "tip": "Snap and crack. Trap claps are often bright already, so tame 3-4 kHz if it's piercing.",
+              "target": [
+                -6,
+                8
+              ]
+            },
+            {
+              "lo": 8000,
+              "hi": 12000,
+              "kind": "watch",
+              "label": "Sizzle",
+              "tip": "Air and sizzle. A gentle high shelf adds shine; too much gets brittle.",
+              "target": [
+                -14,
+                4
+              ]
+            }
           ],
           "tips": {
             "eq": "High-pass at 100-150 Hz, because the kick and 808 own the low end.\n\nFind the body at 180-250 Hz and the crack at 2-5 kHz. Trap snares and claps are usually bright; if one pierces your ears, cut narrowly around 3-4 kHz.",
@@ -54,11 +172,47 @@
           }
         },
         "bass": {
-          "peakRange": [-10, -4],
+          "peakRange": [
+            -10,
+            -4
+          ],
           "zones": [
-            { "lo": 30,  "hi": 60,   "kind": "watch", "label": "Sub",            "tip": "The 808's fundamental. Felt more than heard. Check it on headphones or a sub: laptop speakers can't play it." },
-            { "lo": 150, "hi": 300,  "kind": "cut",   "label": "Mud / overlap",  "tip": "Where the 808 overlaps the kick and other instruments. A small dip here tightens the low end." },
-            { "lo": 700, "hi": 1500, "kind": "boost", "label": "Harmonics",      "tip": "Makes the 808 audible on phones and earbuds. Create these with saturation/distortion rather than EQ boosts." }
+            {
+              "lo": 30,
+              "hi": 60,
+              "kind": "watch",
+              "label": "Sub",
+              "tip": "The 808's fundamental. Felt more than heard. Check it on headphones or a sub: laptop speakers can't play it.",
+              "target": [
+                4,
+                22
+              ],
+              "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
+              "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+            },
+            {
+              "lo": 150,
+              "hi": 300,
+              "kind": "cut",
+              "label": "Mud / overlap",
+              "tip": "Where the 808 overlaps the kick and other instruments. A small dip here tightens the low end.",
+              "target": [
+                -30,
+                8
+              ]
+            },
+            {
+              "lo": 700,
+              "hi": 1500,
+              "kind": "boost",
+              "label": "Harmonics",
+              "tip": "Makes the 808 audible on phones and earbuds. Create these with saturation/distortion rather than EQ boosts.",
+              "target": [
+                -14,
+                2
+              ],
+              "tooLittle": "Not enough {label}, so this will disappear on phones and laptops. Add saturation/distortion to create harmonics, or boost about {amt} dB around {hz}."
+            }
           ],
           "tips": {
             "eq": "High-pass around 25-30 Hz.\n\nMake sure the 808 is tuned to the song's key. That matters more than EQ.\n\nIf it disappears on small speakers, add saturation to create harmonics instead of boosting the sub. Clean up overlap with the kick by dipping where the kick's thump lives, or use sidechain.",
@@ -70,13 +224,68 @@
           }
         },
         "vocal": {
-          "peakRange": [-12, -6],
+          "peakRange": [
+            -12,
+            -6
+          ],
           "zones": [
-            { "lo": 20,    "hi": 120,   "kind": "cut",   "label": "Rumble",     "tip": "Handling noise, plosives and room rumble. High-pass up to ~100-120 Hz for rap vocals." },
-            { "lo": 200,   "hi": 400,   "kind": "cut",   "label": "Mud",        "tip": "Muffled, boxy sound. Cut a few dB if the vocal sounds like it's in a cupboard." },
-            { "lo": 2000,  "hi": 5000,  "kind": "boost", "label": "Presence",   "tip": "Clarity and intelligibility. A gentle broad boost helps every word come through." },
-            { "lo": 5000,  "hi": 9000,  "kind": "watch", "label": "Sibilance", "tip": "Harsh S and T sounds live here. Use a de-esser instead of a static EQ cut." },
-            { "lo": 10000, "hi": 16000, "kind": "boost", "label": "Air",        "tip": "Expensive-sounding sheen. A high shelf boost, added before the de-esser catches the extra S's." }
+            {
+              "lo": 20,
+              "hi": 120,
+              "kind": "cut",
+              "label": "Rumble",
+              "tip": "Handling noise, plosives and room rumble. High-pass up to ~100-120 Hz for rap vocals.",
+              "target": [
+                -60,
+                -6
+              ],
+              "tooMuch": "There's low-end rumble below {hi}. Add a high-pass filter (12-18 dB/oct) and raise it until the sound starts to thin out, then back off a little."
+            },
+            {
+              "lo": 200,
+              "hi": 400,
+              "kind": "cut",
+              "label": "Mud",
+              "tip": "Muffled, boxy sound. Cut a few dB if the vocal sounds like it's in a cupboard.",
+              "target": [
+                -30,
+                6
+              ]
+            },
+            {
+              "lo": 2000,
+              "hi": 5000,
+              "kind": "boost",
+              "label": "Presence",
+              "tip": "Clarity and intelligibility. A gentle broad boost helps every word come through.",
+              "target": [
+                -6,
+                8
+              ]
+            },
+            {
+              "lo": 5000,
+              "hi": 9000,
+              "kind": "watch",
+              "label": "Sibilance",
+              "tip": "Harsh S and T sounds live here. Use a de-esser instead of a static EQ cut.",
+              "target": [
+                -30,
+                4
+              ],
+              "tooMuch": "S and T sounds are strong (peaking around {hz}). Use a de-esser set to about {hz} instead of a static EQ cut. Aim for 3-6 dB of reduction on the S's only."
+            },
+            {
+              "lo": 10000,
+              "hi": 16000,
+              "kind": "boost",
+              "label": "Air",
+              "tip": "Expensive-sounding sheen. A high shelf boost, added before the de-esser catches the extra S's.",
+              "target": [
+                -12,
+                4
+              ]
+            }
           ],
           "tips": {
             "eq": "High-pass at 80-120 Hz (higher for rap than singing). Cut mud at 200-400 Hz if it sounds muffled.\n\nRap vocals need clarity: a gentle boost at 3-5 kHz for presence and a high shelf above 10 kHz for air.\n\nTame harsh S's with a de-esser (5-9 kHz) rather than EQ.",
@@ -89,18 +298,52 @@
         }
       }
     },
-
     {
       "id": "pop",
       "name": "Pop",
       "summary": "The vocal is king: everything supports a polished, bright, upfront lead vocal. The low end is controlled and balanced.",
       "guides": {
         "kick": {
-          "peakRange": [-12, -8],
+          "peakRange": [
+            -12,
+            -8
+          ],
           "zones": [
-            { "lo": 50,   "hi": 80,   "kind": "boost", "label": "Thump",    "tip": "Body of the kick. Boost moderately; pop needs a tight kick, not a huge sub." },
-            { "lo": 250,  "hi": 400,  "kind": "cut",   "label": "Boxiness", "tip": "Cardboard zone. Cut a few dB to clean up room for the bass and vocal." },
-            { "lo": 2500, "hi": 5000, "kind": "boost", "label": "Click",    "tip": "Attack. A small boost keeps the kick audible in dense arrangements." }
+            {
+              "lo": 50,
+              "hi": 80,
+              "kind": "boost",
+              "label": "Thump",
+              "tip": "Body of the kick. Boost moderately; pop needs a tight kick, not a huge sub.",
+              "target": [
+                4,
+                20
+              ],
+              "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
+              "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+            },
+            {
+              "lo": 250,
+              "hi": 400,
+              "kind": "cut",
+              "label": "Boxiness",
+              "tip": "Cardboard zone. Cut a few dB to clean up room for the bass and vocal.",
+              "target": [
+                -30,
+                8
+              ]
+            },
+            {
+              "lo": 2500,
+              "hi": 5000,
+              "kind": "boost",
+              "label": "Click",
+              "tip": "Attack. A small boost keeps the kick audible in dense arrangements.",
+              "target": [
+                -12,
+                2
+              ]
+            }
           ],
           "tips": {
             "eq": "High-pass around 30 Hz.\n\nPop kicks are tight and controlled: moderate boost at 50-80 Hz, cut boxiness around 300 Hz, and a little click at 3-5 kHz so it's heard under a busy arrangement.\n\nAvoid huge sub boosts and leave room for the bass.",
@@ -112,11 +355,44 @@
           }
         },
         "snare": {
-          "peakRange": [-14, -8],
+          "peakRange": [
+            -14,
+            -8
+          ],
           "zones": [
-            { "lo": 150,  "hi": 250,  "kind": "watch", "label": "Body",     "tip": "Weight of the snare. Boost if thin." },
-            { "lo": 400,  "hi": 800,  "kind": "cut",   "label": "Boxiness", "tip": "Honky, boxy tone. A cut here makes the snare sound more expensive." },
-            { "lo": 3000, "hi": 6000, "kind": "boost", "label": "Crack",    "tip": "Snap. Be careful: this range overlaps the vocal's presence zone." }
+            {
+              "lo": 150,
+              "hi": 250,
+              "kind": "watch",
+              "label": "Body",
+              "tip": "Weight of the snare. Boost if thin.",
+              "target": [
+                -8,
+                8
+              ]
+            },
+            {
+              "lo": 400,
+              "hi": 800,
+              "kind": "cut",
+              "label": "Boxiness",
+              "tip": "Honky, boxy tone. A cut here makes the snare sound more expensive.",
+              "target": [
+                -30,
+                6
+              ]
+            },
+            {
+              "lo": 3000,
+              "hi": 6000,
+              "kind": "boost",
+              "label": "Crack",
+              "tip": "Snap. Be careful: this range overlaps the vocal's presence zone.",
+              "target": [
+                -6,
+                8
+              ]
+            }
           ],
           "tips": {
             "eq": "High-pass at 80-100 Hz.\n\nBody at 150-250 Hz, cut boxiness around 500 Hz, add crack at 3-6 kHz and a high shelf for air if needed.\n\nPop snares are bright, but they shouldn't compete with the vocal's 2-5 kHz presence.",
@@ -128,11 +404,47 @@
           }
         },
         "bass": {
-          "peakRange": [-12, -8],
+          "peakRange": [
+            -12,
+            -8
+          ],
           "zones": [
-            { "lo": 40,  "hi": 80,   "kind": "watch", "label": "Fundamental", "tip": "Weight of the bass notes. Should feel solid but not boomy." },
-            { "lo": 200, "hi": 300,  "kind": "cut",   "label": "Mud",         "tip": "Low-mid build-up. Cut here if the mix feels cloudy." },
-            { "lo": 700, "hi": 1500, "kind": "boost", "label": "Definition",  "tip": "Note definition, so the bass line is heard on small speakers. Boost or saturate." }
+            {
+              "lo": 40,
+              "hi": 80,
+              "kind": "watch",
+              "label": "Fundamental",
+              "tip": "Weight of the bass notes. Should feel solid but not boomy.",
+              "target": [
+                4,
+                22
+              ],
+              "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
+              "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+            },
+            {
+              "lo": 200,
+              "hi": 300,
+              "kind": "cut",
+              "label": "Mud",
+              "tip": "Low-mid build-up. Cut here if the mix feels cloudy.",
+              "target": [
+                -30,
+                8
+              ]
+            },
+            {
+              "lo": 700,
+              "hi": 1500,
+              "kind": "boost",
+              "label": "Definition",
+              "tip": "Note definition, so the bass line is heard on small speakers. Boost or saturate.",
+              "target": [
+                -14,
+                2
+              ],
+              "tooLittle": "Not enough {label}, so this will disappear on phones and laptops. Add saturation/distortion to create harmonics, or boost about {amt} dB around {hz}."
+            }
           ],
           "tips": {
             "eq": "High-pass around 30 Hz.\n\nPop bass must be heard on small speakers: boost 700 Hz-1.5 kHz for note definition, or use gentle saturation.\n\nCut mud around 200-300 Hz and leave space for the kick at its thump frequency.",
@@ -144,13 +456,68 @@
           }
         },
         "vocal": {
-          "peakRange": [-12, -6],
+          "peakRange": [
+            -12,
+            -6
+          ],
           "zones": [
-            { "lo": 20,    "hi": 100,   "kind": "cut",   "label": "Rumble",    "tip": "High-pass up to 80-100 Hz to remove rumble and plosive thumps." },
-            { "lo": 200,   "hi": 400,   "kind": "cut",   "label": "Mud",       "tip": "Muffled zone. Cut if the vocal lacks clarity." },
-            { "lo": 2000,  "hi": 5000,  "kind": "boost", "label": "Presence",  "tip": "Pop vocals are bright and forward. A broad, gentle boost here." },
-            { "lo": 5000,  "hi": 9000,  "kind": "watch", "label": "Sibilance", "tip": "Harsh S's. Always de-ess after brightening." },
-            { "lo": 10000, "hi": 16000, "kind": "boost", "label": "Air",       "tip": "Glossy sheen. A high shelf of a few dB is common in pop." }
+            {
+              "lo": 20,
+              "hi": 100,
+              "kind": "cut",
+              "label": "Rumble",
+              "tip": "High-pass up to 80-100 Hz to remove rumble and plosive thumps.",
+              "target": [
+                -60,
+                -6
+              ],
+              "tooMuch": "There's low-end rumble below {hi}. Add a high-pass filter (12-18 dB/oct) and raise it until the sound starts to thin out, then back off a little."
+            },
+            {
+              "lo": 200,
+              "hi": 400,
+              "kind": "cut",
+              "label": "Mud",
+              "tip": "Muffled zone. Cut if the vocal lacks clarity.",
+              "target": [
+                -30,
+                6
+              ]
+            },
+            {
+              "lo": 2000,
+              "hi": 5000,
+              "kind": "boost",
+              "label": "Presence",
+              "tip": "Pop vocals are bright and forward. A broad, gentle boost here.",
+              "target": [
+                -6,
+                8
+              ]
+            },
+            {
+              "lo": 5000,
+              "hi": 9000,
+              "kind": "watch",
+              "label": "Sibilance",
+              "tip": "Harsh S's. Always de-ess after brightening.",
+              "target": [
+                -30,
+                4
+              ],
+              "tooMuch": "S and T sounds are strong (peaking around {hz}). Use a de-esser set to about {hz} instead of a static EQ cut. Aim for 3-6 dB of reduction on the S's only."
+            },
+            {
+              "lo": 10000,
+              "hi": 16000,
+              "kind": "boost",
+              "label": "Air",
+              "tip": "Glossy sheen. A high shelf of a few dB is common in pop.",
+              "target": [
+                -12,
+                4
+              ]
+            }
           ],
           "tips": {
             "eq": "High-pass at 80-100 Hz. Cut mud at 200-400 Hz.\n\nPop vocals are bright and glossy: a broad presence boost at 2-5 kHz and an air shelf from 10-12 kHz up.\n\nAlways de-ess after brightening. Cut harsh resonances narrowly rather than boosting more.",
@@ -163,18 +530,52 @@
         }
       }
     },
-
     {
       "id": "house",
       "name": "House / EDM",
       "summary": "The kick drives everything: four-on-the-floor, a big clean low end, sidechain pumping, and wide, wet synths and vocals.",
       "guides": {
         "kick": {
-          "peakRange": [-8, -5],
+          "peakRange": [
+            -8,
+            -5
+          ],
           "zones": [
-            { "lo": 45,   "hi": 70,   "kind": "boost", "label": "Sub thump", "tip": "The kick's fundamental, the engine of the track. Keep it clean; carve the bass around it." },
-            { "lo": 250,  "hi": 500,  "kind": "cut",   "label": "Boxiness",  "tip": "Mud zone. Cutting here gives a tighter, more club-ready kick." },
-            { "lo": 2000, "hi": 5000, "kind": "boost", "label": "Punch",     "tip": "Click and punch that cut through the synths." }
+            {
+              "lo": 45,
+              "hi": 70,
+              "kind": "boost",
+              "label": "Sub thump",
+              "tip": "The kick's fundamental, the engine of the track. Keep it clean; carve the bass around it.",
+              "target": [
+                4,
+                20
+              ],
+              "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
+              "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+            },
+            {
+              "lo": 250,
+              "hi": 500,
+              "kind": "cut",
+              "label": "Boxiness",
+              "tip": "Mud zone. Cutting here gives a tighter, more club-ready kick.",
+              "target": [
+                -30,
+                8
+              ]
+            },
+            {
+              "lo": 2000,
+              "hi": 5000,
+              "kind": "boost",
+              "label": "Punch",
+              "tip": "Click and punch that cut through the synths.",
+              "target": [
+                -12,
+                2
+              ]
+            }
           ],
           "tips": {
             "eq": "High-pass at 20-30 Hz.\n\nIn house the kick is the loudest, most important element. Make sure its fundamental (usually 45-70 Hz) is clean. Cut boxiness at 250-500 Hz.\n\nCarve the bass around the kick, not the other way round.",
@@ -186,11 +587,44 @@
           }
         },
         "snare": {
-          "peakRange": [-14, -10],
+          "peakRange": [
+            -14,
+            -10
+          ],
           "zones": [
-            { "lo": 150,  "hi": 300,   "kind": "cut",   "label": "Low body", "tip": "Usually high-passed away in house so the clap doesn't fight the kick and bass." },
-            { "lo": 1000, "hi": 3000,  "kind": "boost", "label": "Clap",     "tip": "Where a clap's character lives." },
-            { "lo": 8000, "hi": 12000, "kind": "boost", "label": "Air",      "tip": "Shine. A high shelf makes claps sparkle on big systems." }
+            {
+              "lo": 150,
+              "hi": 300,
+              "kind": "cut",
+              "label": "Low body",
+              "tip": "Usually high-passed away in house so the clap doesn't fight the kick and bass.",
+              "target": [
+                -30,
+                2
+              ]
+            },
+            {
+              "lo": 1000,
+              "hi": 3000,
+              "kind": "boost",
+              "label": "Clap",
+              "tip": "Where a clap's character lives.",
+              "target": [
+                -6,
+                8
+              ]
+            },
+            {
+              "lo": 8000,
+              "hi": 12000,
+              "kind": "boost",
+              "label": "Air",
+              "tip": "Shine. A high shelf makes claps sparkle on big systems.",
+              "target": [
+                -14,
+                4
+              ]
+            }
           ],
           "tips": {
             "eq": "High-pass at 150-200 Hz so it doesn't fight the kick and bass.\n\nClaps live around 1-3 kHz; add air above 8 kHz for shine.\n\nLayered claps: EQ each layer into a different range.",
@@ -202,11 +636,47 @@
           }
         },
         "bass": {
-          "peakRange": [-10, -6],
+          "peakRange": [
+            -10,
+            -6
+          ],
           "zones": [
-            { "lo": 40,  "hi": 100,  "kind": "watch", "label": "Sub (mono)",   "tip": "Keep it mono. If it clashes with the kick's fundamental, sidechain or dip it." },
-            { "lo": 100, "hi": 250,  "kind": "cut",   "label": "Kick clash",   "tip": "Mid-bass build-up that blurs the kick. Clean it out." },
-            { "lo": 800, "hi": 2000, "kind": "boost", "label": "Character",    "tip": "Growl and character, so the bass is heard in clubs and on phones. Saturation works well here." }
+            {
+              "lo": 40,
+              "hi": 100,
+              "kind": "watch",
+              "label": "Sub (mono)",
+              "tip": "Keep it mono. If it clashes with the kick's fundamental, sidechain or dip it.",
+              "target": [
+                4,
+                22
+              ],
+              "tooLittle": "The low end is {dev} dB weaker than typical for {genre}. Boost about {amt} dB around {hz} with a wide bell or low shelf, or choose a sample with more weight.",
+              "tooMuch": "Too much sub for {genre} ({dev} dB over). It will eat your headroom. Cut about {amt} dB around {hz}, and check it isn't clashing with the kick or 808."
+            },
+            {
+              "lo": 100,
+              "hi": 250,
+              "kind": "cut",
+              "label": "Kick clash",
+              "tip": "Mid-bass build-up that blurs the kick. Clean it out.",
+              "target": [
+                -30,
+                8
+              ]
+            },
+            {
+              "lo": 800,
+              "hi": 2000,
+              "kind": "boost",
+              "label": "Character",
+              "tip": "Growl and character, so the bass is heard in clubs and on phones. Saturation works well here.",
+              "target": [
+                -14,
+                2
+              ],
+              "tooLittle": "Not enough {label}, so this will disappear on phones and laptops. Add saturation/distortion to create harmonics, or boost about {amt} dB around {hz}."
+            }
           ],
           "tips": {
             "eq": "High-pass around 30 Hz. Keep everything below ~120 Hz mono.\n\nCut the bass where the kick's fundamental sits if they clash.\n\nFor synth basses, add character at 800 Hz-2 kHz with saturation so the bass is heard on every system.",
@@ -218,13 +688,68 @@
           }
         },
         "vocal": {
-          "peakRange": [-12, -6],
+          "peakRange": [
+            -12,
+            -6
+          ],
           "zones": [
-            { "lo": 20,    "hi": 150,   "kind": "cut",   "label": "Low cut",   "tip": "High-pass harder than in pop (120-200 Hz). The kick and bass need the space." },
-            { "lo": 200,   "hi": 400,   "kind": "cut",   "label": "Mud",       "tip": "Cut if the vocal blurs into the synths." },
-            { "lo": 2000,  "hi": 5000,  "kind": "boost", "label": "Presence",  "tip": "Helps the vocal cut through a dense, wide mix." },
-            { "lo": 5000,  "hi": 9000,  "kind": "watch", "label": "Sibilance", "tip": "De-ess, especially before big reverbs, or S's will splash." },
-            { "lo": 10000, "hi": 16000, "kind": "boost", "label": "Air",       "tip": "Bright, airy vocals suit dance music." }
+            {
+              "lo": 20,
+              "hi": 150,
+              "kind": "cut",
+              "label": "Low cut",
+              "tip": "High-pass harder than in pop (120-200 Hz). The kick and bass need the space.",
+              "target": [
+                -60,
+                -6
+              ],
+              "tooMuch": "There's low-end rumble below {hi}. Add a high-pass filter (12-18 dB/oct) and raise it until the sound starts to thin out, then back off a little."
+            },
+            {
+              "lo": 200,
+              "hi": 400,
+              "kind": "cut",
+              "label": "Mud",
+              "tip": "Cut if the vocal blurs into the synths.",
+              "target": [
+                -30,
+                6
+              ]
+            },
+            {
+              "lo": 2000,
+              "hi": 5000,
+              "kind": "boost",
+              "label": "Presence",
+              "tip": "Helps the vocal cut through a dense, wide mix.",
+              "target": [
+                -6,
+                8
+              ]
+            },
+            {
+              "lo": 5000,
+              "hi": 9000,
+              "kind": "watch",
+              "label": "Sibilance",
+              "tip": "De-ess, especially before big reverbs, or S's will splash.",
+              "target": [
+                -30,
+                4
+              ],
+              "tooMuch": "S and T sounds are strong (peaking around {hz}). Use a de-esser set to about {hz} instead of a static EQ cut. Aim for 3-6 dB of reduction on the S's only."
+            },
+            {
+              "lo": 10000,
+              "hi": 16000,
+              "kind": "boost",
+              "label": "Air",
+              "tip": "Bright, airy vocals suit dance music.",
+              "target": [
+                -12,
+                4
+              ]
+            }
           ],
           "tips": {
             "eq": "High-pass more aggressively than in pop (120-200 Hz): the kick and bass need that space.\n\nBoost presence at 2-5 kHz and air from 10 kHz up. Thin, bright vocals cut through a dense dance mix.",

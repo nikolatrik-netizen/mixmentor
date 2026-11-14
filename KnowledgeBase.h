@@ -13,6 +13,8 @@ namespace mm
         juce::String kind;   // "boost", "cut" or "watch"
         juce::String label;
         juce::String tip;
+        float targetMinDb = -12.0f, targetMaxDb = 12.0f;   // healthy range vs. the track's average level
+        juce::String tooMuch, tooLittle;                    // optional advice templates (see AdviceBuilder)
     };
 
     /** Everything the plugin knows about one instrument inside one genre. */

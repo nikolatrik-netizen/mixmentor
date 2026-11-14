@@ -1,4 +1,5 @@
 #include "LevelMeter.h"
+#include "Theme.h"
 
 void LevelMeter::setLevels (float peakDb, float holdDb, float rmsDb)
 {
@@ -19,47 +20,54 @@ float LevelMeter::yForDb (float db, juce::Rectangle<float> area) const
 
 void LevelMeter::paint (juce::Graphics& g)
 {
-    auto area = getLocalBounds().toFloat().reduced (0.0f, 7.0f);
-    auto scaleArea = area.removeFromLeft (30.0f);
-    auto bar = area.reduced (4.0f, 0.0f);
+    using namespace theme;
 
-    g.setColour (juce::Colour (0xff15171c));
-    g.fillRoundedRectangle (bar, 3.0f);
+    auto area = getLocalBounds().toFloat().reduced (0.0f, 7.0f);
+    auto scaleArea = area.removeFromLeft (24.0f);
+    area.removeFromLeft (4.0f);
+    auto bar = area.withSizeKeepingCentre (juce::jmin (14.0f, area.getWidth()), area.getHeight());
+
+    // Track
+    g.setColour (col::analyzerTop);
+    g.fillRoundedRectangle (bar, 4.0f);
 
     // Target range
     const float yMax = yForDb (targetMax, bar), yMin = yForDb (targetMin, bar);
-    g.setColour (juce::Colour (0xff3ecf8e).withAlpha (0.18f));
-    g.fillRect (bar.withY (yMax).withBottom (yMin));
-    g.setColour (juce::Colour (0xff3ecf8e).withAlpha (0.7f));
-    g.drawHorizontalLine ((int) yMax, bar.getX(), bar.getRight());
-    g.drawHorizontalLine ((int) yMin, bar.getX(), bar.getRight());
+    g.setColour (col::good.withAlpha (0.12f));
+    g.fillRect (bar.withY (yMax).withBottom (yMin).expanded (3.0f, 0.0f));
+    g.setColour (col::good.withAlpha (0.7f));
+    g.fillRect (bar.getX() - 3.0f, yMax, bar.getWidth() + 6.0f, 1.0f);
+    g.fillRect (bar.getX() - 3.0f, yMin, bar.getWidth() + 6.0f, 1.0f);
 
-    // RMS (wide, dim) and peak (narrow, bright)
     const auto colourFor = [this] (float db)
     {
-        if (db > targetMax) return juce::Colour (0xffef5b5b);
-        if (db >= targetMin) return juce::Colour (0xff3ecf8e);
-        return juce::Colour (0xff7aa7ff);
+        if (db > targetMax) return col::bad;
+        if (db >= targetMin) return col::good;
+        return col::accent;
     };
 
-    const float yRms = yForDb (rms, bar);
-    g.setColour (colourFor (rms).withAlpha (0.35f));
-    g.fillRect (bar.withTop (yRms));
+    // RMS (wide, translucent) and peak (narrow, bright with gradient)
+    const auto inner = bar.reduced (2.0f);
+    const float yRms = yForDb (rms, inner);
+    g.setColour (colourFor (rms).withAlpha (0.28f));
+    g.fillRoundedRectangle (inner.withTop (yRms), 2.5f);
 
-    const float yPeak = yForDb (peak, bar);
-    g.setColour (colourFor (peak));
-    g.fillRect (bar.reduced (bar.getWidth() * 0.3f, 0.0f).withTop (yPeak));
+    const float yPeak = yForDb (peak, inner);
+    const auto c = colourFor (peak);
+    const auto peakBar = inner.reduced (inner.getWidth() * 0.25f, 0.0f).withTop (yPeak);
+    g.setGradientFill (juce::ColourGradient (c, 0.0f, peakBar.getY(), c.withAlpha (0.5f), 0.0f, peakBar.getBottom(), false));
+    g.fillRoundedRectangle (peakBar, 2.0f);
 
-    // Peak hold line
+    // Peak hold
     if (hold > floorDb)
     {
-        g.setColour (juce::Colours::white);
-        g.drawHorizontalLine ((int) yForDb (hold, bar), bar.getX(), bar.getRight());
+        g.setColour (juce::Colours::white.withAlpha (0.9f));
+        g.fillRect (inner.getX(), yForDb (hold, inner) - 0.5f, inner.getWidth(), 1.5f);
     }
 
     // Scale
-    g.setFont (juce::FontOptions (10.0f));
-    g.setColour (juce::Colours::white.withAlpha (0.5f));
+    g.setFont (font (9.5f));
+    g.setColour (col::textFaint);
     for (float db : { 0.0f, -6.0f, -12.0f, -18.0f, -24.0f, -36.0f, -48.0f })
         g.drawText (juce::String ((int) db), scaleArea.withY (yForDb (db, bar) - 6.0f).withHeight (12.0f).toNearestInt(),
                     juce::Justification::centredRight);
