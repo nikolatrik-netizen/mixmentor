@@ -29,7 +29,7 @@ juce_add_plugin(MixMentor
     COPY_PLUGIN_AFTER_BUILD     FALSE)
 
 # The genre knowledge base is compiled into the plugin.
-juce_add_binary_data(MixMentorData SOURCES knowledge.json Inter-Regular.ttf Inter-SemiBold.ttf)
+juce_add_binary_data(MixMentorData SOURCES knowledge.json Inter-Light.ttf Inter-Regular.ttf Inter-SemiBold.ttf)
 
 target_sources(MixMentor PRIVATE
     KnowledgeBase.cpp

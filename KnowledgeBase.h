@@ -25,9 +25,17 @@ namespace mm
         std::map<juce::String, juce::String> tips;   // process id -> tip text
     };
 
+    struct WorkflowStep
+    {
+        juce::String phase, title, text;
+    };
+
     struct Genre
     {
-        juce::String id, name, summary;
+        juce::String id, name, summary, bpm;
+        juce::String theoryText;                     // keys, scales, progressions, groove, loudness
+        juce::StringArray elements;                  // key elements from the genre guide
+        std::vector<WorkflowStep> workflow;          // 30-step production workflow
         std::map<juce::String, Guide> guides;        // instrument id -> guide
     };
 

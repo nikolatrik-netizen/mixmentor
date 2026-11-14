@@ -5,19 +5,14 @@ namespace theme
 {
     namespace
     {
-        juce::Typeface::Ptr regularFace()
+        juce::Typeface::Ptr loadFace (const void* data, int size)
         {
-            static auto face = juce::Typeface::createSystemTypefaceFor (BinaryData::InterRegular_ttf,
-                                                                        (size_t) BinaryData::InterRegular_ttfSize);
-            return face;
+            return juce::Typeface::createSystemTypefaceFor (data, (size_t) size);
         }
 
-        juce::Typeface::Ptr semiboldFace()
-        {
-            static auto face = juce::Typeface::createSystemTypefaceFor (BinaryData::InterSemiBold_ttf,
-                                                                        (size_t) BinaryData::InterSemiBold_ttfSize);
-            return face;
-        }
+        juce::Typeface::Ptr lightFace()    { static auto f = loadFace (BinaryData::InterLight_ttf,    BinaryData::InterLight_ttfSize);    return f; }
+        juce::Typeface::Ptr regularFace()  { static auto f = loadFace (BinaryData::InterRegular_ttf,  BinaryData::InterRegular_ttfSize);  return f; }
+        juce::Typeface::Ptr semiboldFace() { static auto f = loadFace (BinaryData::InterSemiBold_ttf, BinaryData::InterSemiBold_ttfSize); return f; }
     }
 
     juce::FontOptions font (float height, bool semibold)
@@ -25,19 +20,38 @@ namespace theme
         return juce::FontOptions (semibold ? semiboldFace() : regularFace()).withHeight (height);
     }
 
-    void drawCard (juce::Graphics& g, juce::Rectangle<float> area, juce::Colour fill, float radius)
+    juce::FontOptions fontLight (float height)
+    {
+        return juce::FontOptions (lightFace()).withHeight (height);
+    }
+
+    void drawPanel (juce::Graphics& g, juce::Rectangle<float> area, juce::Colour fill, float radius)
     {
         g.setColour (fill);
         g.fillRoundedRectangle (area, radius);
-        g.setColour (col::border);
+        g.setColour (juce::Colours::white.withAlpha (0.035f));                // faint top highlight
+        g.drawHorizontalLine ((int) area.getY() + 1, area.getX() + radius, area.getRight() - radius);
+        g.setColour (col::border.withAlpha (0.8f));
         g.drawRoundedRectangle (area.reduced (0.5f), radius, 1.0f);
     }
 
-    void drawCaption (juce::Graphics& g, const juce::String& text, juce::Rectangle<float> area, juce::Colour colour)
+    void drawLabel (juce::Graphics& g, const juce::String& text, juce::Rectangle<float> area,
+                    juce::Colour colour, juce::Justification just)
     {
         g.setColour (colour);
-        g.setFont (juce::Font (font (11.0f, true)).withExtraKerningFactor (0.12f));
-        g.drawText (text.toUpperCase(), area, juce::Justification::centredLeft, false);
+        g.setFont (font (12.5f));
+        g.drawText (text.toLowerCase(), area, just, false);
+    }
+
+    void drawValueBox (juce::Graphics& g, juce::Rectangle<float> area, const juce::String& text, juce::Colour textColour)
+    {
+        g.setColour (col::box);
+        g.fillRoundedRectangle (area, 3.0f);
+        g.setColour (col::border.withAlpha (0.6f));
+        g.drawRoundedRectangle (area.reduced (0.5f), 3.0f, 1.0f);
+        g.setColour (textColour);
+        g.setFont (font (13.5f));
+        g.drawText (text, area, juce::Justification::centred, false);
     }
 
     //==============================================================================
@@ -45,37 +59,36 @@ namespace theme
     {
         using namespace juce;
 
-        setColourScheme ({ col::bg, col::card, col::raised, col::border, col::text,
-                           col::accent, col::text, col::raised, col::text });
+        setColourScheme ({ col::window, col::panel, col::box, col::border, col::text,
+                           col::accent, Colours::white, col::box, col::text });
 
-        setColour (ResizableWindow::backgroundColourId, col::bg);
+        setColour (ResizableWindow::backgroundColourId, col::window);
 
-        setColour (ComboBox::backgroundColourId, col::raised);
+        setColour (ComboBox::backgroundColourId, col::box);
         setColour (ComboBox::outlineColourId, col::border);
         setColour (ComboBox::textColourId, col::text);
         setColour (ComboBox::arrowColourId, col::textDim);
         setColour (ComboBox::focusedOutlineColourId, col::accent);
 
-        setColour (PopupMenu::backgroundColourId, col::raised);
+        setColour (PopupMenu::backgroundColourId, col::boxHover);
         setColour (PopupMenu::textColourId, col::text);
-        setColour (PopupMenu::highlightedBackgroundColourId, col::accent.withAlpha (0.16f));
+        setColour (PopupMenu::highlightedBackgroundColourId, col::boxHover);
         setColour (PopupMenu::highlightedTextColourId, col::text);
 
-        setColour (TextButton::buttonColourId, col::raised);
-        setColour (TextButton::buttonOnColourId, col::accent.withAlpha (0.2f));
+        setColour (TextButton::buttonColourId, col::box);
         setColour (TextButton::textColourOffId, col::text);
         setColour (TextButton::textColourOnId, col::text);
 
         setColour (TextEditor::backgroundColourId, Colours::transparentBlack);
         setColour (TextEditor::outlineColourId, Colours::transparentBlack);
         setColour (TextEditor::focusedOutlineColourId, Colours::transparentBlack);
-        setColour (TextEditor::textColourId, col::text.withAlpha (0.88f));
-        setColour (TextEditor::highlightColourId, col::accent.withAlpha (0.3f));
+        setColour (TextEditor::textColourId, col::text);
+        setColour (TextEditor::highlightColourId, col::accent.withAlpha (0.2f));
 
         setColour (Label::textColourId, col::text);
         setColour (ScrollBar::thumbColourId, col::textFaint);
 
-        setColour (TooltipWindow::backgroundColourId, col::raised);
+        setColour (TooltipWindow::backgroundColourId, col::boxHover);
         setColour (TooltipWindow::textColourId, col::text);
         setColour (TooltipWindow::outlineColourId, col::border);
     }
@@ -92,36 +105,35 @@ namespace theme
         auto r = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height).reduced (0.5f);
         const bool hover = box.isMouseOver (true) || isButtonDown;
 
-        g.setColour (hover ? col::raisedHover : col::raised);
-        g.fillRoundedRectangle (r, 7.0f);
-        g.setColour (box.hasKeyboardFocus (false) ? col::accent.withAlpha (0.6f) : col::border);
-        g.drawRoundedRectangle (r, 7.0f, 1.0f);
+        g.setColour (hover ? col::boxHover : col::box);
+        g.fillRoundedRectangle (r, 4.0f);
+        g.setColour (col::border.withAlpha (hover ? 1.0f : 0.7f));
+        g.drawRoundedRectangle (r, 4.0f, 1.0f);
 
-        // Chevron
-        const float cx = (float) width - 16.0f, cy = (float) height * 0.5f;
+        const float cx = (float) width - 15.0f, cy = (float) height * 0.5f;
         juce::Path chevron;
         chevron.startNewSubPath (cx - 4.0f, cy - 2.0f);
         chevron.lineTo (cx, cy + 2.0f);
         chevron.lineTo (cx + 4.0f, cy - 2.0f);
-        g.setColour (hover ? col::text : col::textDim);
-        g.strokePath (chevron, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour (col::textDim);
+        g.strokePath (chevron, juce::PathStrokeType (1.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
     juce::Font LookAndFeel::getComboBoxFont (juce::ComboBox&)
     {
-        return font (14.0f, true);
+        return font (14.0f);
     }
 
     void LookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
     {
-        label.setBounds (12, 0, box.getWidth() - 36, box.getHeight());
+        label.setBounds (10, 0, box.getWidth() - 32, box.getHeight());
         label.setFont (getComboBoxFont (box));
     }
 
     //==============================================================================
     void LookAndFeel::drawPopupMenuBackground (juce::Graphics& g, int width, int height)
     {
-        g.fillAll (col::raised);
+        g.fillAll (col::boxHover);
         g.setColour (col::border);
         g.drawRect (0, 0, width, height, 1);
     }
@@ -133,7 +145,7 @@ namespace theme
     {
         if (isSeparator)
         {
-            g.setColour (col::border);
+            g.setColour (col::border.withAlpha (0.6f));
             g.fillRect (area.reduced (10, 0).withHeight (1).withY (area.getCentreY()));
             return;
         }
@@ -141,8 +153,8 @@ namespace theme
         auto r = area.toFloat().reduced (4.0f, 1.0f);
         if (isHighlighted && isActive)
         {
-            g.setColour (col::accent.withAlpha (0.16f));
-            g.fillRoundedRectangle (r, 5.0f);
+            g.setColour (col::accent.withAlpha (0.14f));
+            g.fillRoundedRectangle (r, 3.0f);
         }
 
         if (isTicked)
@@ -151,7 +163,7 @@ namespace theme
             g.fillEllipse (r.getX() + 10.0f, r.getCentreY() - 3.0f, 6.0f, 6.0f);
         }
 
-        g.setColour (isActive ? (isTicked ? col::text : col::text.withAlpha (0.85f)) : col::textFaint);
+        g.setColour (isActive ? col::text : col::textFaint);
         g.setFont (font (14.0f, isTicked));
         g.drawText (text, r.withTrimmedLeft (26.0f), juce::Justification::centredLeft, true);
     }
@@ -160,7 +172,7 @@ namespace theme
                                                  int& idealWidth, int& idealHeight)
     {
         if (isSeparator) { idealWidth = 50; idealHeight = 9; return; }
-        idealHeight = 32;
+        idealHeight = 30;
         idealWidth = juce::GlyphArrangement::getStringWidthInt (juce::Font (font (14.0f, true)), text) + 48;
     }
 
@@ -170,23 +182,61 @@ namespace theme
     }
 
     //==============================================================================
+    // Buttons with the "flat" property are text-only (used on the dark top bar).
     void LookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& b, const juce::Colour&,
                                             bool isHighlighted, bool isDown)
     {
-        auto r = b.getLocalBounds().toFloat().reduced (0.5f);
-        const bool on = b.getToggleState();
+        if (b.getProperties()["flat"])
+        {
+            if (isHighlighted || isDown)
+            {
+                g.setColour (juce::Colours::white.withAlpha (isDown ? 0.08f : 0.04f));
+                g.fillRoundedRectangle (b.getLocalBounds().toFloat(), 3.0f);
+            }
+            return;
+        }
 
-        g.setColour (on ? col::accent.withAlpha (0.2f)
-                        : isDown ? col::raisedHover.brighter (0.05f)
-                        : isHighlighted ? col::raisedHover : col::raised);
-        g.fillRoundedRectangle (r, 7.0f);
-        g.setColour (on ? col::accent.withAlpha (0.5f) : col::border);
-        g.drawRoundedRectangle (r, 7.0f, 1.0f);
+        auto r = b.getLocalBounds().toFloat().reduced (0.5f);
+        g.setColour (isDown ? col::box : isHighlighted ? col::boxHover : col::box);
+        g.fillRoundedRectangle (r, 4.0f);
+        g.setColour (isHighlighted ? col::accent.withAlpha (0.6f) : col::border);
+        g.drawRoundedRectangle (r, 4.0f, 1.0f);
+    }
+
+    void LookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& b, bool, bool)
+    {
+        const bool flat = b.getProperties()["flat"];
+        g.setColour (flat ? (b.isMouseOver() ? col::accent : col::textDim) : col::text);
+        g.setFont (flat ? font (14.0f) : font (13.0f));
+        g.drawText (b.getButtonText(), b.getLocalBounds(), juce::Justification::centred, false);
     }
 
     juce::Font LookAndFeel::getTextButtonFont (juce::TextButton&, int)
     {
-        return font (13.0f, true);
+        return font (13.0f);
+    }
+
+    void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height, float pos,
+                                        float startAngle, float endAngle, juce::Slider& slider)
+    {
+        const auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height);
+        const float r = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f - 2.0f;
+        const auto c = bounds.getCentre();
+        const bool hover = slider.isMouseOverOrDragging();
+
+        // Body: soft shadow, gradient and a thin rim
+        g.setColour (juce::Colours::black.withAlpha (0.45f));
+        g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (c.translated (0.0f, 3.0f)));
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff3a3f47), c.x, c.y - r,
+                                                 juce::Colour (0xff1d2025), c.x, c.y + r, false));
+        g.fillEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (c));
+        g.setColour (hover ? col::accent.withAlpha (0.5f) : juce::Colours::white.withAlpha (0.08f));
+        g.drawEllipse (juce::Rectangle<float> (r * 2.0f, r * 2.0f).withCentre (c).reduced (0.5f), 1.0f);
+
+        // Pointer
+        const float a = startAngle + pos * (endAngle - startAngle);
+        g.setColour (col::accent);
+        g.drawLine ({ c.getPointOnCircumference (r * 0.45f, a), c.getPointOnCircumference (r * 0.85f, a) }, 3.0f);
     }
 
     void LookAndFeel::drawScrollbar (juce::Graphics& g, juce::ScrollBar&, int x, int y, int width, int height,
@@ -202,15 +252,16 @@ namespace theme
     //==============================================================================
     juce::TextLayout LookAndFeel::layoutTooltip (const juce::String& text, float maxWidth)
     {
-        // First line is the title (bold); the rest is body text.
+        // First line is the title; the rest is body text.
         const auto title = text.upToFirstOccurrenceOf ("\n", false, false);
         const auto body  = text.fromFirstOccurrenceOf ("\n", false, false).trim();
 
         juce::AttributedString s;
         s.setWordWrap (juce::AttributedString::byWord);
-        s.append (title, font (13.0f, true), col::text);
+        s.append (title, font (13.5f, true), col::text);
         if (body.isNotEmpty())
-            s.append ("\n\n" + body, font (12.5f), col::text.withAlpha (0.8f));
+            s.append ("\n\n" + body, font (13.0f), col::textDim);
+        s.setLineSpacing (1.5f);
 
         juce::TextLayout layout;
         layout.createLayout (s, maxWidth);
@@ -220,23 +271,29 @@ namespace theme
     juce::Rectangle<int> LookAndFeel::getTooltipBounds (const juce::String& tipText, juce::Point<int> screenPos,
                                                         juce::Rectangle<int> parentArea)
     {
-        const auto layout = layoutTooltip (tipText, 300.0f);
-        const int w = (int) std::ceil (juce::jmin (300.0f, layout.getWidth())) + 24;
-        const int h = (int) std::ceil (layout.getHeight()) + 20;
+        constexpr float maxW = 300.0f;
+        const auto layout = layoutTooltip (tipText, maxW);
+        const int w = (int) std::ceil (juce::jmin (maxW, layout.getWidth())) + 28;
+        const int h = (int) std::ceil (layout.getHeight()) + 24;
 
-        return juce::Rectangle<int> (screenPos.x > parentArea.getCentreX() ? screenPos.x - (w + 12) : screenPos.x + 16,
-                                     screenPos.y > parentArea.getCentreY() ? screenPos.y - (h + 8)  : screenPos.y + 12,
-                                     w, h).constrainedWithin (parentArea);
+        // Always open to the right of the mouse, vertically centred on it.
+        juce::Rectangle<int> r (screenPos.x + 18, screenPos.y - h / 2, w, h);
+
+        // Only flip to the left if there's genuinely no room on the right.
+        if (r.getRight() > parentArea.getRight())
+            r.setX (screenPos.x - 18 - w);
+
+        return r.constrainedWithin (parentArea);
     }
 
     void LookAndFeel::drawTooltip (juce::Graphics& g, const juce::String& text, int width, int height)
     {
         auto r = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height);
-        g.setColour (col::raised);
-        g.fillRoundedRectangle (r, 8.0f);
-        g.setColour (col::border.brighter (0.2f));
-        g.drawRoundedRectangle (r.reduced (0.5f), 8.0f, 1.0f);
+        g.setColour (col::boxHover);
+        g.fillRoundedRectangle (r, 5.0f);
+        g.setColour (col::accent.withAlpha (0.5f));
+        g.drawRoundedRectangle (r.reduced (0.5f), 5.0f, 1.0f);
 
-        layoutTooltip (text, (float) width - 24.0f).draw (g, r.reduced (12.0f, 10.0f));
+        layoutTooltip (text, (float) width - 28.0f).draw (g, r.reduced (14.0f, 12.0f));
     }
 }

@@ -3,10 +3,9 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "SpectrumView.h"
-#include "LevelMeter.h"
 #include "Theme.h"
 
-/** Full-window overlay shown on first load: "What are you making today?" */
+/** Full-window overlay shown on first load: "what are you making today?" */
 class GenrePicker : public juce::Component
 {
 public:
@@ -19,16 +18,16 @@ private:
     class Card : public juce::Button
     {
     public:
-        Card (const juce::String& name, const juce::String& summary);
+        Card (const juce::String& name, const juce::String& bpm, const juce::String& summary);
         void paintButton (juce::Graphics&, bool isHighlighted, bool isDown) override;
     private:
-        juce::String summary;
+        juce::String bpm, summary;
     };
 
     juce::OwnedArray<Card> cards;
 };
 
-/** One rounded bar of options (EQ | Compression | ...), like a modern tab switcher. */
+/** Row of options with one selected, like a soft | hard switch. */
 class SegmentedControl : public juce::Component
 {
 public:
@@ -50,23 +49,29 @@ private:
     int selected = 0, hovered = -1;
 };
 
-/** Gain staging card: big peak readout, target, verdict and the meter. */
-class GainPanel : public juce::Component
+/** Gain staging: a trim knob (really changes the volume) inside a ring that shows the peak level
+    against the genre's target range, plus an "auto-match" button. */
+class GainGauge : public juce::Component
 {
 public:
-    GainPanel();
-    void setState (float holdDb, float targetMin, float targetMax, bool hasGuide);
-    LevelMeter& getMeter() { return meter; }
+    explicit GainGauge (juce::AudioProcessorValueTreeState& params);
+    void setState (float peakDb, float holdDb, float targetMin, float targetMax, bool hasGuide);
+    std::function<void()> onAutoMatch;
+
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    LevelMeter meter;
-    float hold = -100.0f, minDb = -12.0f, maxDb = -6.0f;
+    juce::Point<float> centre() const { return { (float) getWidth() * 0.5f, 74.0f }; }
+
+    juce::Slider knob;
+    juce::TextButton autoButton { "auto-match target" };
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
+    float peak = -100.0f, hold = -100.0f, minDb = -12.0f, maxDb = -6.0f;
     bool guide = false;
 };
 
-/** The "Live advice" list: what to do right now, based on what the analyzer hears. */
+/** The "live advice" list: what to do right now, based on what the analyzer hears. */
 class AdvicePanel : public juce::Component
 {
 public:
@@ -84,6 +89,27 @@ private:
     bool live = false;
 };
 
+/** The genre's 30-step workflow as a checklist. Click a step to tick it off. */
+class WorkflowList : public juce::Component
+{
+public:
+    void setSteps (const std::vector<mm::WorkflowStep>& steps, juce::uint32 doneBits);
+    void setWidthAndLayout (int width);
+    std::function<void (int stepIndex)> onToggle;
+
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseMove (const juce::MouseEvent&) override;
+    void mouseExit (const juce::MouseEvent&) override;
+
+private:
+    struct Row { juce::Rectangle<float> bounds; juce::TextLayout layout; bool phaseHeader = false; int step = -1; juce::String phase; };
+    std::vector<mm::WorkflowStep> steps;
+    std::vector<Row> rows;
+    juce::uint32 done = 0;
+    int hovered = -1;
+};
+
 class MixMentorEditor : public juce::AudioProcessorEditor,
                         private juce::Timer
 {
@@ -99,29 +125,35 @@ private:
     void refreshContent();
     void updateGainStatus();
     void updateAdvice();
+    bool isWorkflowTab() const;
+    bool isTheoryTab() const;
+    juce::uint32 workflowBits() const;
 
     MixMentorProcessor& processor;
     juce::SharedResourcePointer<theme::LookAndFeel> lookAndFeel;
 
     juce::ComboBox genreBox, instrumentBox;
-    juce::TextButton relistenButton { "Re-listen" };
+    juce::TextButton relistenButton { "re-listen" }, guideButton { "?" };
     SpectrumView spectrum;
-    GainPanel gainPanel;
+    GainGauge gauge { processor.parameters };
     SegmentedControl processTabs;
     juce::TextEditor tipText;
+    WorkflowList workflow;
+    juce::Viewport workflowView;
     AdvicePanel advice;
     GenrePicker picker;
-    juce::TooltipWindow tooltipWindow { this, 300 };
+    juce::TooltipWindow tooltipWindow { this, 350 };
 
     // Layout rectangles for things painted directly by the editor
-    juce::Rectangle<int> headerArea, analyzerCard, guideCard;
-    juce::String summaryText, guideTitle, trackName;
+    juce::Rectangle<int> sidebar, topBar, guidePanel, elementsArea, gaugeTextArea;
+    juce::String summaryText, guideTitle, bpmText, genreName;
+    juce::StringArray elements;
 
     int currentProcess = 0;
     int shownGenre = -2, shownInstrument = -2;
 
     std::vector<float> readBuffer = std::vector<float> (1 << 15);
-    float peakDisplayDb = -100.0f, holdDb = -100.0f, rmsDisplayDb = -100.0f;
+    float peakDisplayDb = -100.0f, holdDb = -100.0f;
     int holdFrames = 0, frameCounter = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MixMentorEditor)

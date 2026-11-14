@@ -213,12 +213,9 @@ void SpectrumView::paint (juce::Graphics& g)
     using namespace theme;
     const auto bounds = getLocalBounds().toFloat();
     const bool live = hasReadings() && readings.size() == zones.size();
+    const auto white = juce::Colours::white;
 
-    juce::Path clip;
-    clip.addRoundedRectangle (bounds, 8.0f);
-    g.reduceClipRegion (clip);
-
-    // Background
+    // Background: soft blue-grey gradient
     g.setGradientFill (juce::ColourGradient (col::analyzerTop, 0.0f, 0.0f, col::analyzerBot, 0.0f, bounds.getBottom(), false));
     g.fillAll();
 
@@ -226,29 +223,21 @@ void SpectrumView::paint (juce::Graphics& g)
     for (float hz : { 30.0f, 40.0f, 60.0f, 70.0f, 80.0f, 90.0f, 300.0f, 400.0f, 600.0f, 700.0f, 800.0f, 900.0f,
                       3000.0f, 4000.0f, 6000.0f, 7000.0f, 8000.0f, 9000.0f })
     {
-        g.setColour (juce::Colours::white.withAlpha (0.025f));
+        g.setColour (white.withAlpha (0.025f));
         g.drawVerticalLine ((int) xForFreq (hz), 0.0f, bounds.getHeight());
     }
-    g.setFont (font (10.5f));
     for (float hz : { 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f })
     {
-        const float x = xForFreq (hz);
-        g.setColour (juce::Colours::white.withAlpha (0.06f));
-        g.drawVerticalLine ((int) x, 0.0f, bounds.getHeight());
-        g.setColour (col::textFaint);
-        const auto text = hz >= 1000.0f ? juce::String (hz / 1000.0f, 0) + "k" : juce::String ((int) hz);
-        g.drawText (text, (int) x - 20, getHeight() - 18, 40, 14, juce::Justification::centred);
+        g.setColour (white.withAlpha (0.06f));
+        g.drawVerticalLine ((int) xForFreq (hz), 0.0f, bounds.getHeight());
     }
     for (float db : { -18.0f, -36.0f, -54.0f, -72.0f })
     {
-        const float y = yForDb (db);
-        g.setColour (juce::Colours::white.withAlpha (0.045f));
-        g.drawHorizontalLine ((int) y, 0.0f, bounds.getWidth());
-        g.setColour (col::textFaint);
-        g.drawText (juce::String ((int) db), getWidth() - 34, (int) y - 14, 28, 12, juce::Justification::right);
+        g.setColour (white.withAlpha (0.05f));
+        g.drawHorizontalLine ((int) yForDb (db), 0.0f, bounds.getWidth());
     }
 
-    // Zone bands (soft gradient, hairline edges)
+    // Zone bands: soft colour tints with thin edges
     for (size_t i = 0; i < zones.size(); ++i)
     {
         const auto& z = zones[i];
@@ -256,15 +245,15 @@ void SpectrumView::paint (juce::Graphics& g)
         const auto c = colourForKind (z.kind);
         const bool hovered = (int) i == hoveredZone;
 
-        g.setGradientFill (juce::ColourGradient (c.withAlpha (hovered ? 0.16f : 0.085f), 0.0f, 0.0f,
-                                                 c.withAlpha (0.0f), 0.0f, bounds.getBottom(), false));
+        g.setGradientFill (juce::ColourGradient (c.withAlpha (hovered ? 0.16f : 0.08f), 0.0f, 0.0f,
+                                                 c.withAlpha (0.01f), 0.0f, bounds.getBottom(), false));
         g.fillRect (juce::Rectangle<float> (x1, 0.0f, x2 - x1, bounds.getHeight()));
-        g.setColour (c.withAlpha (hovered ? 0.5f : 0.18f));
+        g.setColour (c.withAlpha (hovered ? 0.7f : 0.25f));
         g.fillRect (x1, 0.0f, 1.0f, bounds.getHeight());
         g.fillRect (x2 - 1.0f, 0.0f, 1.0f, bounds.getHeight());
     }
 
-    // Live spectrum: soft gradient fill + thin line
+    // Live spectrum: darker blue area, like a filled analyzer
     juce::Path curve;
     const float binHz = (float) lastSampleRate / (float) fftSize;
     for (int px = 0; px <= getWidth(); px += 2)
@@ -277,19 +266,17 @@ void SpectrumView::paint (juce::Graphics& g)
         if (px == 0) curve.startNewSubPath ((float) px, y);
         else         curve.lineTo ((float) px, y);
     }
-
     juce::Path fill (curve);
     fill.lineTo (bounds.getRight(), bounds.getBottom());
     fill.lineTo (0.0f, bounds.getBottom());
     fill.closeSubPath();
-    juce::ColourGradient fillGrad (col::accent.withAlpha (0.22f), 0.0f, bounds.getHeight() * 0.3f,
-                                   col::accent2.withAlpha (0.0f), 0.0f, bounds.getBottom(), false);
-    g.setGradientFill (fillGrad);
+    g.setGradientFill (juce::ColourGradient (col::liveFill.brighter (0.3f).withAlpha (0.75f), 0.0f, bounds.getHeight() * 0.3f,
+                                             col::liveFill.withAlpha (0.25f), 0.0f, bounds.getBottom(), false));
     g.fillPath (fill);
-    g.setColour (col::accent.withAlpha (0.55f));
+    g.setColour (col::liveFill.brighter (0.9f).withAlpha (0.6f));
     g.strokePath (curve, juce::PathStrokeType (1.0f));
 
-    // Averaged spectrum with a soft glow: this is what the zones are judged on
+    // Averaged spectrum: the clean white line the zones are judged on
     if (hasReadings())
     {
         juce::Path avg;
@@ -299,10 +286,25 @@ void SpectrumView::paint (juce::Graphics& g)
             if (px == 0) avg.startNewSubPath ((float) px, y);
             else         avg.lineTo ((float) px, y);
         }
-        g.setColour (juce::Colours::white.withAlpha (0.07f));
-        g.strokePath (avg, juce::PathStrokeType (7.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-        g.setColour (juce::Colours::white.withAlpha (0.92f));
-        g.strokePath (avg, juce::PathStrokeType (1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour (white.withAlpha (0.08f));
+        g.strokePath (avg, juce::PathStrokeType (6.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour (white.withAlpha (0.95f));
+        g.strokePath (avg, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+
+    // Labels
+    g.setFont (font (11.5f));
+    for (float hz : { 50.0f, 100.0f, 200.0f, 500.0f, 1000.0f, 2000.0f, 5000.0f, 10000.0f })
+    {
+        const float x = xForFreq (hz);
+        const auto text = hz >= 1000.0f ? juce::String (hz / 1000.0f, 0) + "k" : juce::String ((int) hz);
+        g.setColour (col::textFaint);
+        g.drawText (text, (int) x - 20, getHeight() - 20, 40, 14, juce::Justification::centred);
+    }
+    for (float db : { -18.0f, -36.0f, -54.0f, -72.0f })
+    {
+        g.setColour (col::textFaint);
+        g.drawText (juce::String ((int) db), getWidth() - 36, (int) yForDb (db) - 15, 30, 13, juce::Justification::right);
     }
 
     // Per-zone: target box, measured level, label pill
@@ -320,7 +322,7 @@ void SpectrumView::paint (juce::Graphics& g)
         {
             const auto& r = readings[i];
             statusColour = colourForStatus (r.status);
-            statusText = r.status == 0 ? "OK"
+            statusText = r.status == 0 ? "ok"
                        : r.status > 0  ? "+" + juce::String (juce::roundToInt (r.deviationDb)) + " dB"
                                        : juce::String (juce::roundToInt (r.deviationDb)) + " dB";
 
@@ -328,22 +330,22 @@ void SpectrumView::paint (juce::Graphics& g)
             const float yTop = yForDb (referenceDb + z.targetMaxDb);
             const float yBottom = yForDb (referenceDb + z.targetMinDb);
             const auto box = juce::Rectangle<float> (x1 + 3.0f, yTop, w - 6.0f, juce::jmax (1.0f, yBottom - yTop));
-            g.setColour (juce::Colours::white.withAlpha (0.035f));
-            g.fillRoundedRectangle (box, 4.0f);
+            g.setColour (white.withAlpha (0.03f));
+            g.fillRoundedRectangle (box, 3.0f);
             juce::Path outline, dashed;
-            outline.addRoundedRectangle (box, 4.0f);
+            outline.addRoundedRectangle (box, 3.0f);
             const float dashes[] = { 3.0f, 3.0f };
             juce::PathStrokeType (1.0f).createDashedStroke (dashed, outline, dashes, 2);
-            g.setColour (juce::Colours::white.withAlpha (0.28f));
+            g.setColour (white.withAlpha (0.4f));
             g.fillPath (dashed);
 
-            // Measured level, with glow
+            // Measured level
             const float yLevel = yForDb (r.levelDb);
-            const auto bar = juce::Rectangle<float> (x1 + 3.0f, yLevel - 1.5f, w - 6.0f, 3.0f);
+            const auto bar = juce::Rectangle<float> (x1 + 3.0f, yLevel - 2.0f, w - 6.0f, 4.0f);
             g.setColour (statusColour.withAlpha (0.25f));
             g.fillRoundedRectangle (bar.expanded (0.0f, 3.0f), 3.0f);
             g.setColour (statusColour);
-            g.fillRoundedRectangle (bar, 1.5f);
+            g.fillRoundedRectangle (bar, 2.0f);
 
             // Resonance marker
             if (r.resonanceHz > 0.0f)
@@ -354,79 +356,82 @@ void SpectrumView::paint (juce::Graphics& g)
                 tri.addTriangle (rx - 5.0f, ry - 8.0f, rx + 5.0f, ry - 8.0f, rx, ry);
                 g.setColour (col::bad);
                 g.fillPath (tri);
-                g.setFont (font (10.5f, true));
-                g.drawText (formatHz (r.resonanceHz), juce::Rectangle<float> (rx - 32.0f, ry - 22.0f, 64.0f, 12.0f),
-                            juce::Justification::centred, false);
+                const auto label = formatHz (r.resonanceHz);
+                g.setFont (font (11.0f, true));
+                const auto lr = juce::Rectangle<float> (rx - 30.0f, ry - 26.0f, 60.0f, 15.0f);
+                g.setColour (col::box);
+                g.fillRoundedRectangle (lr, 7.0f);
+                g.setColour (col::bad);
+                g.drawText (label, lr, juce::Justification::centred, false);
             }
         }
 
-        // Label pill: "● Thump  OK"
-        g.setFont (font (11.5f, true));
-        const float labelW = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), z.label);
-        juce::Font statusFont (font (11.0f, true));
+        // Label pill: white, with a coloured dot (like a band handle)
+        g.setFont (font (12.0f));
+        const float labelW = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), z.label.toLowerCase());
+        juce::Font statusFont (font (12.0f, true));
         const float statusW = statusText.isEmpty() ? 0.0f
                             : (float) juce::GlyphArrangement::getStringWidthInt (statusFont, statusText) + 8.0f;
-        const float pillW = 22.0f + labelW + statusW + 8.0f;
-        const float pillY = 8.0f + (float) (i % 2) * 26.0f;
-        auto pill = juce::Rectangle<float> (juce::jlimit (4.0f, bounds.getRight() - pillW - 4.0f, x1 + 4.0f), pillY, pillW, 20.0f);
+        const float pillW = 24.0f + labelW + statusW + 8.0f;
+        const float pillY = 10.0f + (float) (i % 2) * 28.0f;
+        auto pill = juce::Rectangle<float> (juce::jlimit (4.0f, bounds.getRight() - pillW - 4.0f, x1 + 4.0f), pillY, pillW, 21.0f);
 
-        g.setColour (col::header.withAlpha (0.9f));
-        g.fillRoundedRectangle (pill, 10.0f);
-        g.setColour ((live ? statusColour : kindColour).withAlpha (0.45f));
-        g.drawRoundedRectangle (pill.reduced (0.5f), 10.0f, 1.0f);
+        g.setColour (col::box.withAlpha (0.95f));
+        g.fillRoundedRectangle (pill, 10.5f);
+        g.setColour ((live ? statusColour : kindColour).withAlpha (0.35f));
+        g.drawRoundedRectangle (pill.reduced (0.5f), 10.5f, 1.0f);
 
         g.setColour (kindColour);
-        g.fillEllipse (pill.getX() + 9.0f, pill.getCentreY() - 3.0f, 6.0f, 6.0f);
+        g.fillEllipse (pill.getX() + 8.0f, pill.getCentreY() - 4.5f, 9.0f, 9.0f);
         g.setColour (col::text);
-        g.drawText (z.label, pill.withTrimmedLeft (21.0f).withWidth (labelW + 2.0f), juce::Justification::centredLeft, false);
+        g.setFont (font (12.0f));
+        g.drawText (z.label.toLowerCase(), pill.withTrimmedLeft (23.0f).withWidth (labelW + 2.0f),
+                    juce::Justification::centredLeft, false);
 
         if (statusText.isNotEmpty())
         {
             g.setFont (statusFont);
             g.setColour (statusColour);
-            g.drawText (statusText, pill.withTrimmedLeft (21.0f + labelW + 6.0f).withWidth (statusW),
+            g.drawText (statusText, pill.withTrimmedLeft (23.0f + labelW + 6.0f).withWidth (statusW),
                         juce::Justification::centredLeft, false);
         }
     }
 
-    // Legend / status
+    // Status / legend
     if (zones.empty())
     {
         g.setColour (col::textDim);
         g.setFont (font (14.0f));
-        g.drawText ("Pick a genre and instrument to see frequency zones", getLocalBounds(), juce::Justification::centred);
+        g.drawText ("pick a genre and instrument to see frequency zones", getLocalBounds(), juce::Justification::centred);
     }
     else if (! live)
     {
-        const auto text = signalFrames == 0 ? juce::String ("Press play. The zones will react to your sound.")
-                                            : "Listening...  " + juce::String ((int) (getListeningProgress() * 100.0f)) + "%";
-        g.setFont (font (13.0f, true));
-        const float tw = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), text) + 28.0f;
-        const auto r = juce::Rectangle<float> (tw, 30.0f).withCentre (bounds.getCentre().translated (0.0f, 30.0f));
-        g.setColour (col::header.withAlpha (0.92f));
-        g.fillRoundedRectangle (r, 15.0f);
-        g.setColour (col::border);
-        g.drawRoundedRectangle (r.reduced (0.5f), 15.0f, 1.0f);
+        const auto text = signalFrames == 0 ? juce::String ("press play. the zones will react to your sound")
+                                            : "listening...  " + juce::String ((int) (getListeningProgress() * 100.0f)) + "%";
+        g.setFont (font (13.5f));
+        const float tw = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), text) + 32.0f;
+        const auto r = juce::Rectangle<float> (tw, 32.0f).withCentre (bounds.getCentre().translated (0.0f, 30.0f));
+        g.setColour (col::box);
+        g.fillRoundedRectangle (r, 16.0f);
         g.setColour (col::textDim);
         g.drawText (text, r, juce::Justification::centred, false);
     }
     else
     {
-        struct Key { juce::Colour c; juce::String t; bool line; };
-        const Key keys[] = { { juce::Colours::white, "Average", true }, { col::accent, "Live", true },
-                             { juce::Colours::white.withAlpha (0.5f), "Target", false } };
-        g.setFont (font (10.5f));
-        float x = 10.0f;
-        const float y = bounds.getBottom() - 34.0f;
+        struct Key { juce::String t; int style; };
+        const Key keys[] = { { "average", 0 }, { "live", 1 }, { "target", 2 } };
+        g.setFont (font (11.5f));
+        float x = 12.0f;
+        const float y = bounds.getBottom() - 40.0f;
         for (auto& k : keys)
         {
-            g.setColour (k.c);
-            if (k.line) g.fillRoundedRectangle (x, y + 5.0f, 12.0f, 2.0f, 1.0f);
-            else        g.drawRoundedRectangle (x, y + 1.5f, 12.0f, 9.0f, 2.0f, 1.0f);
+            if (k.style == 0)      { g.setColour (white); g.fillRoundedRectangle (x, y + 5.0f, 14.0f, 2.0f, 1.0f); }
+            else if (k.style == 1) { g.setColour (col::liveFill); g.fillRoundedRectangle (x, y + 1.0f, 14.0f, 10.0f, 2.0f); }
+            else                   { g.setColour (white.withAlpha (0.8f)); g.drawRoundedRectangle (x, y + 1.5f, 14.0f, 9.0f, 2.0f, 1.0f); }
             g.setColour (col::textDim);
             const float tw = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), k.t);
-            g.drawText (k.t, juce::Rectangle<float> (x + 17.0f, y, tw + 4.0f, 12.0f), juce::Justification::centredLeft, false);
-            x += 17.0f + tw + 16.0f;
+            g.drawText (k.t, juce::Rectangle<float> (x + 19.0f, y, tw + 4.0f, 12.0f), juce::Justification::centredLeft, false);
+            x += 19.0f + tw + 16.0f;
         }
     }
 }

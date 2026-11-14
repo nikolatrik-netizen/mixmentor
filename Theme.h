@@ -2,41 +2,49 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-/** Colours, fonts and the custom look of every control. */
+/** Colours, fonts and the custom look of every control. Dark graphite with a warm amber accent. */
 namespace theme
 {
     namespace col
     {
-        const juce::Colour bg          (0xff0e1015);
-        const juce::Colour header      (0xff12151b);
-        const juce::Colour card        (0xff161a21);
-        const juce::Colour raised      (0xff1d222b);
-        const juce::Colour raisedHover (0xff252b36);
-        const juce::Colour border      (0xff262c37);
-        const juce::Colour analyzerTop (0xff0b0d12);
-        const juce::Colour analyzerBot (0xff10131a);
+        const juce::Colour window      (0xff0f1114);   // deep graphite
+        const juce::Colour sideTop     (0xff181a1e);
+        const juce::Colour sideBottom  (0xff121417);
+        const juce::Colour panel       (0xff191c20);
+        const juce::Colour panelLight  (0xff1f2328);
+        const juce::Colour box         (0xff24282e);   // value boxes, dropdowns
+        const juce::Colour boxHover    (0xff2c3138);
+        const juce::Colour border      (0xff30353d);
+        const juce::Colour topBar      (0xff16181c);
 
-        const juce::Colour text        (0xffe9ecf2);
-        const juce::Colour textDim     (0xff9aa3b5);
-        const juce::Colour textFaint   (0xff5d6576);
+        const juce::Colour analyzerTop (0xff111317);
+        const juce::Colour analyzerBot (0xff161a1f);
+        const juce::Colour liveFill    (0xff2b4656);   // muted teal
 
-        const juce::Colour accent      (0xff8b93ff);   // soft periwinkle
-        const juce::Colour accent2     (0xff5fd4f4);   // cyan, used in gradients
+        const juce::Colour text        (0xffe8e6e3);
+        const juce::Colour textDim     (0xff9b9fa6);
+        const juce::Colour textFaint   (0xff636871);
+        const juce::Colour knob        (0xff2a2e34);
 
-        const juce::Colour good        (0xff3ddc97);
-        const juce::Colour bad         (0xffff6b6b);
-        const juce::Colour warn        (0xffffc24b);
+        const juce::Colour accent      (0xfff2a03d);   // warm amber
+        const juce::Colour good        (0xff4cc38a);
+        const juce::Colour bad         (0xfff0625d);
+        const juce::Colour warn        (0xff5aa9e6);   // "too little" = cool blue
     }
 
-    /** Inter, embedded in the plugin so it looks the same on every computer. */
     juce::FontOptions font (float height, bool semibold = false);
+    juce::FontOptions fontLight (float height);
 
-    /** Rounded panel with a hairline border. */
-    void drawCard (juce::Graphics&, juce::Rectangle<float> area, juce::Colour fill = col::card, float radius = 10.0f);
+    /** Soft rounded panel. */
+    void drawPanel (juce::Graphics&, juce::Rectangle<float> area, juce::Colour fill = col::panel, float radius = 6.0f);
 
-    /** Small all-caps section title, e.g. "LIVE ADVICE". */
-    void drawCaption (juce::Graphics&, const juce::String& text, juce::Rectangle<float> area,
-                      juce::Colour colour = col::textFaint);
+    /** Small lowercase section label, e.g. "live advice". */
+    void drawLabel (juce::Graphics&, const juce::String& text, juce::Rectangle<float> area,
+                    juce::Colour colour = col::textDim, juce::Justification just = juce::Justification::centredLeft);
+
+    /** Light rounded value box with centred text, like a hardware read-out. */
+    void drawValueBox (juce::Graphics&, juce::Rectangle<float> area, const juce::String& text,
+                       juce::Colour textColour = col::text);
 
     class LookAndFeel : public juce::LookAndFeel_V4
     {
@@ -61,7 +69,11 @@ namespace theme
 
         void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour& backgroundColour,
                                    bool isHighlighted, bool isDown) override;
+        void drawButtonText (juce::Graphics&, juce::TextButton&, bool isHighlighted, bool isDown) override;
         juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override;
+
+        void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height, float sliderPos,
+                               float startAngle, float endAngle, juce::Slider&) override;
 
         int getDefaultScrollbarWidth() override { return 8; }
         void drawScrollbar (juce::Graphics&, juce::ScrollBar&, int x, int y, int width, int height, bool isVertical,

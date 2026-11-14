@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <atomic>
 #include <vector>
+#include <map>
 
 /** Passes audio through untouched and taps it for analysis (spectrum + levels). */
 class MixMentorProcessor : public juce::AudioProcessor
@@ -50,9 +51,18 @@ public:
 
     juce::String getTrackName() const;
 
+    /** Input trim in dB (the gain staging control). Saved with the project and automatable. */
+    juce::AudioProcessorValueTreeState parameters;
+    juce::RangedAudioParameter* trimParam = nullptr;
+    std::atomic<float>* trimDb = nullptr;
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
     std::atomic<int>  genreIndex { -1 };              // -1 = user hasn't picked a genre yet
     std::atomic<int>  instrumentIndex { 0 };
     std::atomic<bool> instrumentChosenByUser { false };
+
+    /** Ticked workflow steps (bit n = step n), per genre id. Message thread only. */
+    std::map<juce::String, juce::uint32> workflowProgress;
 
 private:
     static constexpr int fifoSize = 1 << 15;
@@ -61,6 +71,7 @@ private:
 
     std::atomic<float> peakSinceLastRead { 0.0f }, latestRms { 0.0f };
     std::atomic<double> currentSampleRate { 44100.0 };
+    juce::SmoothedValue<float> trimGain { 1.0f };
 
     mutable juce::CriticalSection trackNameLock;
     juce::String trackName;

@@ -35,7 +35,20 @@ namespace mm
         {
             for (auto& g : *arr)
             {
-                Genre genre { g["id"].toString(), g["name"].toString(), g["summary"].toString(), {} };
+                Genre genre;
+                genre.id = g["id"].toString();
+                genre.name = g["name"].toString();
+                genre.summary = g["summary"].toString();
+                genre.bpm = g["bpm"].toString();
+                genre.theoryText = g["theoryText"].toString();
+
+                if (auto* els = g["elements"].getArray())
+                    for (auto& e : *els)
+                        genre.elements.add (e.toString());
+
+                if (auto* steps = g["workflow"].getArray())
+                    for (auto& st : *steps)
+                        genre.workflow.push_back ({ st["phase"].toString(), st["title"].toString(), st["text"].toString() });
 
                 if (auto* guidesObj = g["guides"].getDynamicObject())
                 {
@@ -117,16 +130,22 @@ namespace mm
         const auto name = trackName.toLowerCase();
         const auto words = juce::StringArray::fromTokens (name, " _-.:/()[]0123456789", "");
 
+        // Pick the instrument with the longest matching keyword, so "Vocal Chops" finds
+        // the chops keyword rather than plain "vocal".
+        int best = -1, bestLength = 0;
         for (size_t i = 0; i < instruments_.size(); ++i)
         {
             for (auto& kw : instruments_[i].keywords)
             {
-                // Long keywords (e.g. "kick", "808") can match inside a name; short ones
-                // ("bd", "sd") must be a whole word so "Pad" isn't read as a kick drum.
-                if (kw.length() >= 3 ? name.contains (kw) : words.contains (kw))
-                    return (int) i;
+                // Long keywords can match inside a name; short ones ("bd", "ep") must be a whole word.
+                const bool match = kw.length() >= 3 ? name.contains (kw) : words.contains (kw);
+                if (match && kw.length() > bestLength)
+                {
+                    best = (int) i;
+                    bestLength = kw.length();
+                }
             }
         }
-        return -1;
+        return best;
     }
 }

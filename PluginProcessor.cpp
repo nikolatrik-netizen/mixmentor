@@ -5,15 +5,32 @@
 MixMentorProcessor::MixMentorProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      parameters (*this, nullptr, "PARAMS", createParameterLayout())
 {
+    trimParam = parameters.getParameter ("trim");
+    trimDb = parameters.getRawParameterValue ("trim");
+
     mm::KnowledgeBase::get();   // load the knowledge base up front, off the audio thread
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout MixMentorProcessor::createParameterLayout()
+{
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { "trim", 1 }, "Trim",
+        juce::NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("dB")
+            .withStringFromValueFunction ([] (float v, int) { return (v > 0 ? "+" : "") + juce::String (v, 1) + " dB"; })));
+    return layout;
 }
 
 void MixMentorProcessor::prepareToPlay (double sampleRate, int)
 {
     currentSampleRate = sampleRate;
     fifo.reset();
+    trimGain.reset (sampleRate, 0.05);   // 50 ms ramp so trim changes never click
+    trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (trimDb->load()));
 }
 
 bool MixMentorProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -37,7 +54,23 @@ void MixMentorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     if (numIn == 0 || numSamples == 0)
         return;
 
-    // Audio is passed through untouched; we only measure it.
+    // Apply the trim (gain staging). At 0 dB the audio passes through untouched.
+    trimGain.setTargetValue (juce::Decibels::decibelsToGain (trimDb->load()));
+    if (trimGain.isSmoothing())
+    {
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float gain = trimGain.getNextValue();
+            for (int ch = 0; ch < numIn; ++ch)
+                buffer.setSample (ch, i, buffer.getSample (ch, i) * gain);
+        }
+    }
+    else if (std::abs (trimGain.getTargetValue() - 1.0f) > 1.0e-6f)
+    {
+        buffer.applyGain (0, numSamples, trimGain.getTargetValue());
+    }
+
+    // Measure after the trim, so the meter shows what the next plugin receives.
     float blockPeak = 0.0f, sumSquares = 0.0f;
 
     int start1, size1, start2, size2;
@@ -116,6 +149,16 @@ void MixMentorProcessor::getStateInformation (juce::MemoryBlock& destData)
         xml.setAttribute ("instrument", kb.instruments()[(size_t) i].id);
     xml.setAttribute ("instrumentChosenByUser", instrumentChosenByUser.load());
 
+    if (auto paramsXml = parameters.copyState().createXml())
+        xml.addChildElement (paramsXml.release());
+
+    for (auto& [genreId, bits] : workflowProgress)
+    {
+        auto* w = xml.createNewChildElement ("Workflow");
+        w->setAttribute ("genre", genreId);
+        w->setAttribute ("done", juce::String ((juce::int64) bits));
+    }
+
     copyXmlToBinary (xml, destData);
 }
 
@@ -127,6 +170,13 @@ void MixMentorProcessor::setStateInformation (const void* data, int sizeInBytes)
         genreIndex = kb.indexOfGenre (xml->getStringAttribute ("genre"));
         instrumentIndex = juce::jmax (0, kb.indexOfInstrument (xml->getStringAttribute ("instrument")));
         instrumentChosenByUser = xml->getBoolAttribute ("instrumentChosenByUser");
+
+        if (auto* paramsXml = xml->getChildByName (parameters.state.getType()))
+            parameters.replaceState (juce::ValueTree::fromXml (*paramsXml));
+
+        workflowProgress.clear();
+        for (auto* w : xml->getChildWithTagNameIterator ("Workflow"))
+            workflowProgress[w->getStringAttribute ("genre")] = (juce::uint32) w->getStringAttribute ("done").getLargeIntValue();
     }
 }
 
