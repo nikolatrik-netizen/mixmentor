@@ -43,6 +43,7 @@ struct FixSession
     std::vector<float> baseBands;   // third-octave spectrum of the analysed loop (to notice a different part of the song)
     float contentDiffDb = 0.0f;     // how different the re-checked music was, away from the ranges being fixed
     bool contentMismatch = false;   // last re-check heard different music: results weren't updated
+    double startPpq = -1.0, endPpq = -1.0;   // the bars that were analysed (re-check listens to the same ones); -1 = not synced
     int checks = 0;
 };
 
@@ -87,8 +88,35 @@ public:
     //==============================================================================
     // Shared with the editor
 
-    /** GUI thread: pulls up to maxSamples of stereo audio, in order. Returns how many were read. */
+    /** GUI thread: pulls up to maxSamples of the captured stereo audio (only what's inside the
+        bars being analysed), in order. Returns how many were read. */
     int readAnalysisSamples (float* left, float* right, int maxSamples);
+    /** GUI thread: latest audio (mono) for the live spectrum display. */
+    int readDisplaySamples (float* dest, int maxSamples);
+
+    //==============================================================================
+    // Bar-synced capture: analyse and re-check listen to exactly the same bars of the song.
+    enum CaptureState { captureIdle = 0, captureWaiting = 1, captureRunning = 2, captureDone = 3 };
+    /** startPpq < 0: pick the bars automatically (the loop, or the next 4 bars). */
+    void requestCapture (double startPpq, double endPpq)
+    {
+        captureStartPpq.store (startPpq);
+        captureEndPpq.store (endPpq);
+        captureProgress.store (0.0f);
+        captureState.store (captureWaiting);
+    }
+    void cancelCapture()                    { captureState.store (captureIdle); }
+    int getCaptureState() const             { return captureState.load(); }
+    void acknowledgeCaptureDone()           { captureState.store (captureIdle); }
+    double getCaptureStartPpq() const       { return captureStartPpq.load(); }
+    double getCaptureEndPpq() const         { return captureEndPpq.load(); }
+    float getCaptureProgress() const        { return captureProgress.load(); }
+    double getBarLengthPpq() const          { return barLengthPpq.load(); }
+    /** True when the host reports a playing song position (the bar-synced mode works). */
+    bool hostHasSongPosition() const        { return hostPosition.load(); }
+    bool hostIsPlaying() const              { return hostPlaying.load(); }
+    /** Increments when a capture had to start over (playback jumped away mid-way). */
+    int getCaptureRestarts() const          { return captureRestarts.load(); }
     /** Counts audio the GUI didn't pick up in time (the analysis then restarts its current frame). */
     int getDroppedCount() const { return droppedBlocks.load(); }
 
@@ -125,6 +153,13 @@ private:
     std::vector<float> fifoLeft = std::vector<float> ((size_t) fifoSize, 0.0f);
     std::vector<float> fifoRight = std::vector<float> ((size_t) fifoSize, 0.0f);
     std::atomic<int> droppedBlocks { 0 };
+    juce::AbstractFifo displayFifo { 1 << 16 };
+    std::vector<float> displayBuffer = std::vector<float> ((size_t) (1 << 16), 0.0f);
+    std::atomic<int> captureState { captureIdle }, captureRestarts { 0 };
+    std::atomic<double> captureStartPpq { -1.0 }, captureEndPpq { -1.0 }, barLengthPpq { 4.0 };
+    std::atomic<float> captureProgress { 0.0f };
+    std::atomic<bool> hostPosition { false }, hostPlaying { false };
+    void pushCapture (const float* L, const float* R, int n);
     LoudnessMeter meter;
 
     std::atomic<float> peakSinceLastRead { 0.0f }, latestRms { 0.0f };

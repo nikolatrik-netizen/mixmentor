@@ -724,6 +724,8 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
     };
     fixPanel.onStartOver = [this]
     {
+        processor.cancelCapture();
+        captureKind = 0;
         processor.fixSession = {};
         spectrum.resetAnalysis();
         refreshFixPanel();
@@ -837,7 +839,7 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.fillEllipse (s.getX() + 64.0f + wordW + 5.0f, 44.0f, 6.0f, 6.0f);
     g.setColour (col::textFaint);
     g.setFont (font (11.0f));
-    g.drawText ("learn while you mix   v1.1", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
+    g.drawText ("learn while you mix   v1.2", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
 
     g.setColour (col::border.withAlpha (0.6f));
     g.fillRect (s.getX(), 94.0f, s.getWidth(), 1.0f);
@@ -1067,8 +1069,45 @@ void MixMentorEditor::startCapture (int kind)
 {
     captureKind = kind;
     captureFrames.clear();
-    spectrum.startCapture (4.0f);
+    // Drop anything left over from before, so the capture starts clean.
+    for (int n; (n = processor.readAnalysisSamples (readLeft.data(), readRight.data(), (int) readLeft.size())) > 0;) {}
+    { MeterFrame f[64]; while (processor.readMeterFrames (f, 64) > 0) {} }
+
+    // The analyzer runs until the bars are complete (or 4 s of sound without a song position).
+    spectrum.startCapture (1.0e6f);
+    lastRestarts = processor.getCaptureRestarts();
+    const auto& fs = processor.fixSession;
+    if (kind == 2 && fs.startPpq >= 0.0 && fs.endPpq > fs.startPpq)
+        processor.requestCapture (fs.startPpq, fs.endPpq);   // exactly the bars that were analysed
+    else
+        processor.requestCapture (-1.0, -1.0);               // pick the bars now
     refreshFixPanel();
+}
+
+void MixMentorEditor::updateCaptureStatus()
+{
+    if (! spectrum.isCapturing()) { spectrum.setCaptureStatus ({}); return; }
+    if (! processor.hostHasSongPosition())
+    {
+        spectrum.setCaptureStatus (! processor.hostIsPlaying() && spectrum.getHeardSeconds() <= 0.0
+                                       ? juce::String ("waiting for sound: press play in your DAW")
+                                       : "listening...  " + juce::String ((int) (juce::jmin (1.0, spectrum.getHeardSeconds() / 4.0) * 100.0)) + "%");
+        return;
+    }
+    const double bar = juce::jmax (0.25, processor.getBarLengthPpq());
+    const double start = processor.getCaptureStartPpq(), end = processor.getCaptureEndPpq();
+    if (start < 0.0)
+    {
+        spectrum.setCaptureStatus (processor.hostIsPlaying() ? "finding the bars..." : "press play in your DAW");
+        return;
+    }
+    const int firstBar = (int) std::floor (start / bar + 1.0e-6) + 1;
+    const int lastBar = juce::jmax (firstBar, (int) std::ceil (end / bar - 1.0e-6));
+    const auto bars = firstBar == lastBar ? "bar " + juce::String (firstBar) : "bars " + juce::String (firstBar) + "-" + juce::String (lastBar);
+    if (processor.getCaptureState() == MixMentorProcessor::captureWaiting)
+        spectrum.setCaptureStatus ("waiting for " + bars + (processor.hostIsPlaying() ? juce::String ("...") : juce::String (": press play")));
+    else
+        spectrum.setCaptureStatus ("listening to " + bars + "...  " + juce::String ((int) (processor.getCaptureProgress() * 100.0f)) + "%");
 }
 
 void MixMentorEditor::captureFinished()
@@ -1090,7 +1129,14 @@ void MixMentorEditor::captureFinished()
     }
 
     if (captureKind == 2) recheckFixList();
-    else                  buildFixList();
+    else
+    {
+        buildFixList();
+        // Remember exactly which bars were analysed: re-check listens to the same ones.
+        const bool synced = processor.hostHasSongPosition() && processor.getCaptureStartPpq() >= 0.0;
+        processor.fixSession.startPpq = synced ? processor.getCaptureStartPpq() : -1.0;
+        processor.fixSession.endPpq   = synced ? processor.getCaptureEndPpq() : -1.0;
+    }
     captureKind = 0;
     refreshFixPanel();
 }
@@ -1812,8 +1858,8 @@ void MixMentorEditor::timerCallback()
         spectrum.audioGap();
     }
     spectrum.updateSpectrum (processor.getCurrentSampleRate(), peakDb > -50.0f);
-    for (int n; (n = processor.readAnalysisSamples (readLeft.data(), readRight.data(), (int) readLeft.size())) > 0;)
-        spectrum.pushSamples (readLeft.data(), readRight.data(), n);
+    for (int n; (n = processor.readDisplaySamples (readLeft.data(), (int) readLeft.size())) > 0;)
+        spectrum.pushDisplay (readLeft.data(), n);
 
     peakDisplayDb = juce::jmax (peakDb, peakDisplayDb - 1.0f);
     if (peakDb >= holdDb)       { holdDb = peakDb; holdFrames = 60; }   // hold for ~2 s
@@ -1822,17 +1868,50 @@ void MixMentorEditor::timerCallback()
 
     updateGainStatus();
 
+    // Captured bars: audio for the analyzer + meter frames, then finish when the bars are complete.
+    if (captureKind != 0)
     {
+        if (processor.getCaptureRestarts() != lastRestarts)
+        {
+            // Playback jumped away in the middle of the bars: listen to them again from the start.
+            lastRestarts = processor.getCaptureRestarts();
+            captureFrames.clear();
+            spectrum.startCapture (1.0e6f);
+        }
+        const int stateBefore = processor.getCaptureState();
+        for (int n; (n = processor.readAnalysisSamples (readLeft.data(), readRight.data(), (int) readLeft.size())) > 0;)
+            spectrum.pushCapture (readLeft.data(), readRight.data(), n);
         MeterFrame frames[64];
-        int got;
-        while ((got = processor.readMeterFrames (frames, 64)) > 0)
-            if (spectrum.isCapturing() && captureKind != 0)
-                for (int k = 0; k < got; ++k)
-                    if (frames[k].n > 0 && frames[k].ms / (float) frames[k].n > 1.0e-7f)   // only while there's sound
-                        captureFrames.push_back (frames[k]);
+        for (int got; (got = processor.readMeterFrames (frames, 64)) > 0;)
+            for (int k = 0; k < got; ++k)
+                if (frames[k].n > 0 && frames[k].ms / (float) frames[k].n > 1.0e-7f)   // only while there's sound
+                    captureFrames.push_back (frames[k]);
+
+        const bool barsDone = stateBefore == MixMentorProcessor::captureDone;
+        const bool timeDone = ! processor.hostHasSongPosition() && spectrum.getHeardSeconds() >= 4.0;
+        if (barsDone || timeDone)
+        {
+            processor.acknowledgeCaptureDone();
+            if (spectrum.finishCapture())
+                captureFinished();
+            else
+            {
+                // Nothing audible in those bars: keep listening for them.
+                captureFrames.clear();
+                spectrum.startCapture (1.0e6f);
+                processor.requestCapture (processor.getCaptureStartPpq(), processor.getCaptureEndPpq());
+            }
+        }
+        updateCaptureStatus();
     }
-    if (spectrum.takeCaptureResult())
-        captureFinished();
+    else
+    {
+        // Not capturing: keep the queues empty.
+        for (int n; (n = processor.readAnalysisSamples (readLeft.data(), readRight.data(), (int) readLeft.size())) > 0;) {}
+        MeterFrame frames[64];
+        while (processor.readMeterFrames (frames, 64) > 0) {}
+    }
+    if (spectrum.takeCaptureResult()) {}   // (handled above)
     else if (spectrum.isCapturing() && ++frameCounter % 5 == 0)
         refreshFixPanel();   // progress bar
 }

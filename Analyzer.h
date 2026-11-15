@@ -43,6 +43,9 @@ public:
     void markGap() { fill = 0; }
 
     bool isCapturing() const { return capturing; }
+    /** End the capture now (the bars are complete). */
+    void finishNow() { if (capturing) finish(); }
+    double getHeardSeconds() const { return heardSeconds; }
     float getProgress() const { return targetSeconds > 0 ? (float) juce::jmin (1.0, heardSeconds / targetSeconds) : 0.0f; }
     bool hasHeardSound() const { return heardSeconds > 0.0; }
     bool takeFinished() { const bool f = finished; finished = false; return f; }

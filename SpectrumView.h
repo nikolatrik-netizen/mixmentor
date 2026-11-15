@@ -21,8 +21,15 @@ class SpectrumView : public juce::Component,
 public:
     SpectrumView();
 
-    /** Feed every sample, in order (stereo). The display uses the latest ones, the analysis all of them. */
-    void pushSamples (const float* left, const float* right, int numSamples);
+    /** Latest audio (mono) for the live display. */
+    void pushDisplay (const float* mono, int numSamples);
+    /** The captured bars (stereo), every sample in order. */
+    void pushCapture (const float* left, const float* right, int numSamples);
+    /** The bars are complete: compute the result now. Returns false if there was no sound in them. */
+    bool finishCapture();
+    double getHeardSeconds() const { return analyzer.getHeardSeconds(); }
+    /** Text for the "listening" pill (empty = default). */
+    void setCaptureStatus (const juce::String& text) { if (text != captureStatus) { captureStatus = text; repaint(); } }
     void updateSpectrum (double sampleRate, bool hasSignal);   // call from a GUI timer
     /** Some audio was lost before it reached the analyzer. */
     void audioGap() { analyzer.markGap(); }
@@ -81,6 +88,7 @@ private:
     std::vector<float> smoothedDb = std::vector<float> ((size_t) fftSize / 2, minDb);
     double lastSampleRate = 44100.0;
     bool captureDone = false;
+    juce::String captureStatus;
     Analyzer analyzer;
     std::vector<ZoneMark> marks;
 

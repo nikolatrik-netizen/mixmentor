@@ -57,6 +57,9 @@ public:
         }
     }
 
+    /** Drops a half-filled frame (a new capture starts). */
+    void startNewCapture() { current = {}; }
+
     /** Turns the frames of an analysed loop into readings. */
     static DynamicsReading compute (const std::vector<MeterFrame>& frames);
 

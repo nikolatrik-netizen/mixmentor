@@ -32,19 +32,35 @@ juce::String SpectrumView::formatHz (float hz)
     return juce::String (rounded) + " Hz";
 }
 
-void SpectrumView::pushSamples (const float* left, const float* right, int numSamples)
+void SpectrumView::pushDisplay (const float* mono, int numSamples)
 {
     for (int i = 0; i < numSamples; ++i)
     {
-        history[(size_t) historyWritePos] = 0.5f * (left[i] + right[i]);   // display only
+        history[(size_t) historyWritePos] = mono[i];
         historyWritePos = (historyWritePos + 1) % fftSize;
     }
+}
+
+void SpectrumView::pushCapture (const float* left, const float* right, int numSamples)
+{
     analyzer.push (left, right, numSamples);
     if (analyzer.takeFinished())
     {
         computeReadings();
         captureDone = true;
     }
+}
+
+bool SpectrumView::finishCapture()
+{
+    analyzer.finishNow();
+    if (analyzer.takeFinished() && analyzer.hasResult())
+    {
+        computeReadings();
+        captureDone = true;
+        return true;
+    }
+    return false;
 }
 
 void SpectrumView::resetAnalysis()
@@ -332,8 +348,9 @@ void SpectrumView::paint (juce::Graphics& g)
     }
     else if (analyzer.isCapturing())
     {
-        const auto text = ! analyzer.hasHeardSound() ? juce::String ("waiting for sound: press play in your DAW")
-                                             : "listening...  " + juce::String ((int) (getCaptureProgress() * 100.0f)) + "%";
+        const auto text = captureStatus.isNotEmpty() ? captureStatus
+                        : ! analyzer.hasHeardSound() ? juce::String ("waiting for sound: press play in your DAW")
+                                                     : "listening...  " + juce::String ((int) (getCaptureProgress() * 100.0f)) + "%";
         g.setFont (font (13.5f));
         const float tw = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), text) + 32.0f;
         const auto r = juce::Rectangle<float> (tw, 32.0f).withCentre (bounds.getCentre().translated (0.0f, 30.0f));

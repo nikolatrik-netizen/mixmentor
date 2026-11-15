@@ -185,7 +185,8 @@ private:
     int shownGenre = -2, shownInstrument = -2;
 
     std::vector<float> readLeft = std::vector<float> (1 << 15), readRight = std::vector<float> (1 << 15);
-    int lastDropped = 0;
+    int lastDropped = 0, lastRestarts = 0;
+    void updateCaptureStatus();
     float peakDisplayDb = -100.0f, holdDb = -100.0f;
     int holdFrames = 0, frameCounter = 0;
 
