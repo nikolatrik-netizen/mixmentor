@@ -7,6 +7,7 @@
 #include <array>
 #include "MelodyCore.h"
 #include "TrackRegistry.h"
+#include "Meter.h"
 
 /** One range the analysis asked you to adjust, and how your fix went. */
 struct FixIssue
@@ -27,31 +28,6 @@ struct FixIssue
     float fixedValue = 0.0f;        // what was measured when it was marked fixed (so a later analysis doesn't re-flag noise)
 
     juce::String key() const { return metric.isNotEmpty() ? "m:" + metric : (resonance ? "r:" : "z:") + label; }
-};
-
-/** Dynamics, loudness and stereo measured over the same 4 seconds as the spectrum. */
-struct DynamicsReading
-{
-    bool valid = false;
-    float peakDb = -100.0f;         // highest sample peak
-    float rmsDb = -100.0f;          // average level while playing
-    float crestDb = 0.0f;           // peak minus average: punch vs. density
-    float loudnessLufs = -100.0f;   // K-weighted loudness of the analysed loop (like short-term LUFS)
-    float swingDb = 0.0f;           // how much the level jumps around between loud and quiet moments
-    float correlation = 1.0f;       // +1 mono, 0 very wide, below 0 = phase problems
-    float lowCorrelation = 1.0f;    // the same, below ~120 Hz
-    float sideDb = -100.0f;         // side vs. mid energy (width)
-    float lowSideDb = -100.0f;      // the same, below ~120 Hz
-    bool stereo = false;            // the track has two different channels
-    int clippedSamples = 0;
-};
-
-/** One 50 ms slice of meter data, from the audio thread to the editor. */
-struct MeterFrame
-{
-    float msK = 0, peak = 0, ms = 0;
-    float ll = 0, rr = 0, lr = 0, lowLL = 0, lowRR = 0, lowLR = 0;
-    int n = 0, clips = 0;
 };
 
 /** The result of "analyse": a frozen list of things to fix. Saved with the project. */
@@ -77,9 +53,7 @@ public:
     juce::MidiBuffer melodyMidi;
     juce::AbstractFifo meterFifo { 512 };
     std::array<MeterFrame, 512> meterBuffer {};
-    MeterFrame currentFrame;
-    int frameLength = 2205;
-    juce::IIRFilter kShelf[2], kHighPass[2], lowA[2], lowB[2];
+
     void releaseResources() override {}
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
@@ -108,8 +82,10 @@ public:
     //==============================================================================
     // Shared with the editor
 
-    /** GUI thread: pulls up to maxSamples of the latest mono audio. Returns how many were read. */
-    int readAnalysisSamples (float* dest, int maxSamples);
+    /** GUI thread: pulls up to maxSamples of stereo audio, in order. Returns how many were read. */
+    int readAnalysisSamples (float* left, float* right, int maxSamples);
+    /** Counts audio the GUI didn't pick up in time (the analysis then restarts its current frame). */
+    int getDroppedCount() const { return droppedBlocks.load(); }
 
     /** GUI thread: highest peak (linear) since the last call, then resets it. */
     float takePeak() { return peakSinceLastRead.exchange (0.0f); }
@@ -139,9 +115,12 @@ public:
     std::map<juce::String, juce::uint32> workflowProgress;
 
 private:
-    static constexpr int fifoSize = 1 << 15;
+    static constexpr int fifoSize = 1 << 18;   // ~5 s of stereo audio, so a busy GUI doesn't lose any
     juce::AbstractFifo fifo { fifoSize };
-    std::vector<float> fifoBuffer = std::vector<float> ((size_t) fifoSize, 0.0f);
+    std::vector<float> fifoLeft = std::vector<float> ((size_t) fifoSize, 0.0f);
+    std::vector<float> fifoRight = std::vector<float> ((size_t) fifoSize, 0.0f);
+    std::atomic<int> droppedBlocks { 0 };
+    LoudnessMeter meter;
 
     std::atomic<float> peakSinceLastRead { 0.0f }, latestRms { 0.0f };
     std::atomic<double> currentSampleRate { 44100.0 };

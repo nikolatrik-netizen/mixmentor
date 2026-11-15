@@ -837,7 +837,7 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.fillEllipse (s.getX() + 64.0f + wordW + 5.0f, 44.0f, 6.0f, 6.0f);
     g.setColour (col::textFaint);
     g.setFont (font (11.0f));
-    g.drawText ("learn while you mix   v0.9", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
+    g.drawText ("learn while you mix   v1.0", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
 
     g.setColour (col::border.withAlpha (0.6f));
     g.fillRect (s.getX(), 94.0f, s.getWidth(), 1.0f);
@@ -1100,7 +1100,6 @@ void MixMentorEditor::captureFinished()
 //==============================================================================
 namespace
 {
-    float toDb (double power) { return power > 1.0e-12 ? (float) (10.0 * std::log10 (power)) : -120.0f; }
 
     /** Starting compressor settings per instrument (ratio, attack, release, gain reduction).
         Typical values from mixing guides and compression cheat sheets. */
@@ -1145,44 +1144,7 @@ namespace
 
 void MixMentorEditor::computeDynamics()
 {
-    DynamicsReading d;
-    if (captureFrames.size() < 10) { dynamics = d; return; }
-
-    double msK = 0, ms = 0, ll = 0, rr = 0, lr = 0, lowLL = 0, lowRR = 0, lowLR = 0;
-    long long n = 0;
-    float peak = 0.0f;
-    std::vector<float> frameDb;
-    for (auto& f : captureFrames)
-    {
-        msK += f.msK; ms += f.ms; ll += f.ll; rr += f.rr; lr += f.lr;
-        lowLL += f.lowLL; lowRR += f.lowRR; lowLR += f.lowLR;
-        n += f.n; peak = juce::jmax (peak, f.peak); d.clippedSamples += f.clips;
-        frameDb.push_back (toDb (f.ms / juce::jmax (1, f.n)));
-    }
-    d.peakDb = juce::Decibels::gainToDecibels (peak, -100.0f);
-    d.rmsDb = toDb (ms / (double) n);
-    d.crestDb = d.peakDb - d.rmsDb;
-    d.loudnessLufs = -0.691f + toDb (msK / (double) n);
-
-    // Level swings: loud vs. quiet moments while playing (frames far below the loudest are tails/gaps).
-    std::sort (frameDb.begin(), frameDb.end());
-    const float top = frameDb.back();
-    std::vector<float> body;
-    for (float x : frameDb) if (x > top - 24.0f) body.push_back (x);
-    if (body.size() >= 8)
-        d.swingDb = body[(size_t) (body.size() * 0.9)] - body[(size_t) (body.size() * 0.2)];
-
-    const double denom = std::sqrt (ll * rr), lowDenom = std::sqrt (lowLL * lowRR);
-    d.stereo = std::abs (ll - rr) > 1.0e-6 * (ll + rr) || std::abs (lr - denom) > 1.0e-4 * denom;
-    d.correlation = denom > 1.0e-12 ? (float) (lr / denom) : 1.0f;
-    d.lowCorrelation = lowDenom > 1.0e-12 ? (float) (lowLR / lowDenom) : 1.0f;
-    d.sideDb = toDb ((ll + rr - 2 * lr) / 4.0) - toDb ((ll + rr + 2 * lr) / 4.0);
-    // Only judge low-end width if there is real low end (more than ~5 % of the energy).
-    d.lowSideDb = (lowLL + lowRR) > 0.05 * (ll + rr)
-                      ? toDb ((lowLL + lowRR - 2 * lowLR) / 4.0) - toDb ((lowLL + lowRR + 2 * lowLR) / 4.0)
-                      : -100.0f;
-    d.valid = true;
-    dynamics = d;
+    dynamics = LoudnessMeter::compute (captureFrames);
 }
 
 float MixMentorEditor::metricValue (const juce::String& m) const
@@ -1283,7 +1245,9 @@ void MixMentorEditor::buildFixList()
 
         // Too much: a clear build-up compared with the neighbouring frequencies. Boost zones (like a
         // kick's thump) are supposed to stick out, so they're only flagged when it's extreme.
-        const float bumpLimit = zone.kind == "boost" ? 9.0f : zone.kind == "watch" ? 3.5f : 2.5f;
+        // A boost zone is the instrument's own body (a kick's thump, a bass's fundamental): it's meant to
+        // tower over its neighbours, so its shape never counts as "too much" (only being weak does).
+        const float bumpLimit = zone.kind == "boost" ? 1000.0f : zone.kind == "watch" ? 3.5f : 2.5f;
         const bool tooMuch = r.bumpDb > bumpLimit
                           || (r.relativeDb > zone.targetMaxDb + 6.0f && r.bumpDb > 1.0f);
         // Too little: a clear hole, or far below the genre's typical level.
@@ -1482,7 +1446,7 @@ void MixMentorEditor::refreshFixPanel()
     std::vector<FixPanel::Row> rows;
     int noChange = 0, open = 0;
     const auto instId = kb.instruments()[(size_t) processor.instrumentIndex.load()].id;
-    const auto genreName = kb.genres()[(size_t) processor.genreIndex.load()].name;
+    const auto genreLabel = kb.genres()[(size_t) processor.genreIndex.load()].name;
     for (auto& is : fs.issues)
     {
         if (is.metric.isNotEmpty())
@@ -1517,7 +1481,7 @@ void MixMentorEditor::refreshFixPanel()
                 row.range = "crest " + num (shown) + " dB";
                 chip = instId == "master" ? "glue + limit" : "compress";
                 if (instId == "master")
-                    body = "Peaks stand " + num (shown) + " dB above the average level, which is a lot for " + genreName
+                    body = "Peaks stand " + num (shown) + " dB above the average level, which is a lot for " + genreLabel
                          + " (punchy masters usually sit around 8-12 dB). " + recipe + " Then a limiter (ceiling -1 dB) until crest is under "
                          + num (is.limit, 0) + " dB.";
                 else
@@ -1553,7 +1517,7 @@ void MixMentorEditor::refreshFixPanel()
                 if (m == "loudLo")
                 {
                     chip = "louder";
-                    body = "Finished " + genreName + " masters usually sit around " + num (t.getStart(), 0) + " to " + num (t.getEnd(), 0)
+                    body = "Finished " + genreLabel + " masters usually sit around " + num (t.getStart(), 0) + " to " + num (t.getEnd(), 0)
                          + " LUFS overall, and the loudest part reads 2-4 LU above that. This loop reads " + num (shown)
                          + ". Raise the limiter's input gain (ceiling -1 dB) and keep an eye on punch.";
                 }
@@ -1786,10 +1750,16 @@ void MixMentorEditor::timerCallback()
     // Levels
     const float peakDb = juce::Decibels::gainToDecibels (processor.takePeak(), -100.0f);
 
-    // Spectrum (zones are only judged while there's real signal, not silence between hits)
-    const int n = processor.readAnalysisSamples (readBuffer.data(), (int) readBuffer.size());
-    spectrum.pushSamples (readBuffer.data(), n);
+    // Spectrum: every sample goes to the analyzer, in order. If the audio thread had to drop
+    // some (window frozen), the analyzer restarts its current frame instead of joining a gap.
+    if (processor.getDroppedCount() != lastDropped)
+    {
+        lastDropped = processor.getDroppedCount();
+        spectrum.audioGap();
+    }
     spectrum.updateSpectrum (processor.getCurrentSampleRate(), peakDb > -50.0f);
+    for (int n; (n = processor.readAnalysisSamples (readLeft.data(), readRight.data(), (int) readLeft.size())) > 0;)
+        spectrum.pushSamples (readLeft.data(), readRight.data(), n);
 
     peakDisplayDb = juce::jmax (peakDb, peakDisplayDb - 1.0f);
     if (peakDb >= holdDb)       { holdDb = peakDb; holdFrames = 60; }   // hold for ~2 s

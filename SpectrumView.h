@@ -3,20 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_dsp/juce_dsp.h>
 #include "KnowledgeBase.h"
-
-/** What the analyzer currently measures inside one frequency zone. */
-struct ZoneReading
-{
-    float levelDb = 0.0f;       // average level in the zone (display scale)
-    float relativeDb = 0.0f;    // level compared with the track's overall average
-    float deviationDb = 0.0f;   // >0 = this much over target, <0 = this much under, 0 = in range
-    float peakHz = 0.0f;        // loudest frequency inside the zone
-    float resonanceHz = 0.0f;   // narrow ringing peak, 0 if none
-    float resonanceDb = 0.0f;   // how far that peak sticks out
-    float bumpDb = 0.0f;        // how far the zone sticks out (+) or dips (-) compared with its neighbours
-    float isolatedDb = 0.0f;    // zone level minus the track's level far away from the zone (an EQ cut here lowers this 1:1)
-    int status = 0;             // +1 too much, -1 too little, 0 OK
-};
+#include "Analyzer.h"
 
 /** What the fix list wants shown on a zone's label. */
 struct ZoneMark
@@ -34,17 +21,20 @@ class SpectrumView : public juce::Component,
 public:
     SpectrumView();
 
-    void pushSamples (const float* samples, int numSamples);
+    /** Feed every sample, in order (stereo). The display uses the latest ones, the analysis all of them. */
+    void pushSamples (const float* left, const float* right, int numSamples);
     void updateSpectrum (double sampleRate, bool hasSignal);   // call from a GUI timer
+    /** Some audio was lost before it reached the analyzer. */
+    void audioGap() { analyzer.markGap(); }
     void setZones (std::vector<mm::Zone> newZones);
 
     /** Listen for this many seconds of playing audio, then freeze a snapshot. */
     void startCapture (float seconds);
-    bool isCapturing() const { return capturing; }
-    float getCaptureProgress() const { return captureTarget > 0 ? juce::jmin (1.0f, (float) captureFrames / (float) captureTarget) : 0.0f; }
+    bool isCapturing() const { return analyzer.isCapturing(); }
+    float getCaptureProgress() const { return analyzer.getProgress(); }
     /** Returns true once, when a capture has just finished. */
     bool takeCaptureResult() { const bool r = captureDone; captureDone = false; return r; }
-    bool hasReadings() const { return hasSnapshot; }
+    bool hasReadings() const { return analyzer.hasResult(); }
     /** 31 third-octave band levels (dB) of the frozen analysis, from 20 Hz. Empty before an analysis. */
     std::vector<float> getBandLevels() const;
 
@@ -89,14 +79,13 @@ private:
     int historyWritePos = 0;
     std::vector<float> fftData = std::vector<float> ((size_t) fftSize * 2, 0.0f);
     std::vector<float> smoothedDb = std::vector<float> ((size_t) fftSize / 2, minDb);
-    std::vector<double> averagedPower = std::vector<double> ((size_t) fftSize / 2, 0.0);
     double lastSampleRate = 44100.0;
-    bool capturing = false, captureDone = false, hasSnapshot = false;
-    int captureFrames = 0, captureTarget = 120;
+    bool captureDone = false;
+    Analyzer analyzer;
     std::vector<ZoneMark> marks;
 
     std::vector<mm::Zone> zones;
     std::vector<ZoneReading> readings;
-    float referenceDb = -60.0f, floorDb = -200.0f;
+    float referenceDb = -60.0f;
     int hoveredZone = -1;
 };

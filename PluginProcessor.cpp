@@ -38,17 +38,7 @@ void MixMentorProcessor::prepareToPlay (double sampleRate, int)
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (trimDb->load()));
     melody.prepare (sampleRate);
 
-    // Meters: K-weighting (as in loudness meters, ITU BS.1770) and a 120 Hz low band for low-end width.
-    frameLength = juce::jmax (256, (int) (sampleRate * 0.05));
-    for (int ch = 0; ch < 2; ++ch)
-    {
-        kShelf[ch].setCoefficients (juce::IIRCoefficients::makeHighShelf (sampleRate, 1681.97, 0.7072, 1.5849));
-        kHighPass[ch].setCoefficients (juce::IIRCoefficients::makeHighPass (sampleRate, 38.13, 0.5003));
-        lowA[ch].setCoefficients (juce::IIRCoefficients::makeLowPass (sampleRate, 120.0, 0.7071));
-        lowB[ch].setCoefficients (juce::IIRCoefficients::makeLowPass (sampleRate, 120.0, 0.7071));
-        kShelf[ch].reset(); kHighPass[ch].reset(); lowA[ch].reset(); lowB[ch].reset();
-    }
-    currentFrame = {};
+    meter.prepare (sampleRate);
     melodyMidi.ensureSize (2048);
 }
 
@@ -90,76 +80,56 @@ void MixMentorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     }
 
     // Measure after the trim, so the meter shows what the next plugin receives.
+    const float* L = buffer.getReadPointer (0);
+    const float* R = buffer.getReadPointer (numIn > 1 ? 1 : 0);
     float blockPeak = 0.0f, sumSquares = 0.0f;
-
-    int start1, size1, start2, size2;
-    fifo.prepareToWrite (numSamples, start1, size1, start2, size2);
-
-    const float channelScale = 1.0f / (float) numIn;
-
     for (int i = 0; i < numSamples; ++i)
     {
-        float mono = 0.0f;
-        for (int ch = 0; ch < numIn; ++ch)
-        {
-            const float s = buffer.getSample (ch, i);
-            blockPeak = juce::jmax (blockPeak, std::abs (s));
-            sumSquares += s * s;
-            mono += s;
-        }
-        mono *= channelScale;
-
-        if (i < size1)               fifoBuffer[(size_t) (start1 + i)] = mono;
-        else if (i < size1 + size2)  fifoBuffer[(size_t) (start2 + i - size1)] = mono;
+        blockPeak = juce::jmax (blockPeak, std::abs (L[i]), std::abs (R[i]));
+        sumSquares += 0.5f * (L[i] * L[i] + R[i] * R[i]);
     }
-    fifo.finishedWrite (size1 + size2);   // if the GUI isn't reading, extra samples are dropped
-
-    latestRms = std::sqrt (sumSquares / (float) (numSamples * numIn));
-
+    latestRms = std::sqrt (sumSquares / (float) numSamples);
     float current = peakSinceLastRead.load();
     while (blockPeak > current && ! peakSinceLastRead.compare_exchange_weak (current, blockPeak)) {}
 
-    // Meter frames (dynamics, loudness, stereo)
+    // Stereo audio for the analyzer, every sample in order.
+    if (fifo.getFreeSpace() >= numSamples)
     {
-        const float* L = buffer.getReadPointer (0);
-        const float* R = buffer.getReadPointer (numIn > 1 ? 1 : 0);
-        for (int i = 0; i < numSamples; ++i)
+        int start1, size1, start2, size2;
+        fifo.prepareToWrite (numSamples, start1, size1, start2, size2);
+        std::copy_n (L, size1, fifoLeft.data() + start1);
+        std::copy_n (R, size1, fifoRight.data() + start1);
+        if (size2 > 0)
         {
-            const float l = L[i], r = R[i];
-            const float kl = kHighPass[0].processSingleSampleRaw (kShelf[0].processSingleSampleRaw (l));
-            const float kr = kHighPass[1].processSingleSampleRaw (kShelf[1].processSingleSampleRaw (r));
-            const float ll = lowB[0].processSingleSampleRaw (lowA[0].processSingleSampleRaw (l));
-            const float lrr = lowB[1].processSingleSampleRaw (lowA[1].processSingleSampleRaw (r));
-            auto& f = currentFrame;
-            f.msK += kl * kl + kr * kr;
-            f.ms += 0.5f * (l * l + r * r);
-            f.peak = juce::jmax (f.peak, std::abs (l), std::abs (r));
-            if (std::abs (l) >= 0.999f || std::abs (r) >= 0.999f) ++f.clips;
-            f.ll += l * l; f.rr += r * r; f.lr += l * r;
-            f.lowLL += ll * ll; f.lowRR += lrr * lrr; f.lowLR += ll * lrr;
-            if (++f.n >= frameLength)
-            {
-                int s1, n1, s2, n2;
-                meterFifo.prepareToWrite (1, s1, n1, s2, n2);
-                if (n1 > 0) { meterBuffer[(size_t) s1] = f; meterFifo.finishedWrite (1); }
-                f = {};
-            }
+            std::copy_n (L + size1, size2, fifoLeft.data() + start2);
+            std::copy_n (R + size1, size2, fifoRight.data() + start2);
         }
+        fifo.finishedWrite (size1 + size2);
     }
+    else
+    {
+        droppedBlocks.fetch_add (1);   // the GUI isn't reading (window closed or frozen)
+    }
+
+    // Loudness / true peak / stereo meter frames
+    meter.process (L, R, numSamples, [this] (const MeterFrame& f)
+    {
+        int s1, n1, s2, n2;
+        meterFifo.prepareToWrite (1, s1, n1, s2, n2);
+        if (n1 > 0) { meterBuffer[(size_t) s1] = f; meterFifo.finishedWrite (1); }
+    });
 
     // Melody tab preview: added after the analysis, so it never affects the mix advice.
     melodyMidi.clear();
     melody.process (buffer, melodyMidi, getPlayHead());
 }
 
-int MixMentorProcessor::readAnalysisSamples (float* dest, int maxSamples)
+int MixMentorProcessor::readAnalysisSamples (float* left, float* right, int maxSamples)
 {
     int start1, size1, start2, size2;
     fifo.prepareToRead (juce::jmin (maxSamples, fifo.getNumReady()), start1, size1, start2, size2);
-
-    if (size1 > 0) std::copy_n (fifoBuffer.data() + start1, size1, dest);
-    if (size2 > 0) std::copy_n (fifoBuffer.data() + start2, size2, dest + size1);
-
+    if (size1 > 0) { std::copy_n (fifoLeft.data() + start1, size1, left);  std::copy_n (fifoRight.data() + start1, size1, right); }
+    if (size2 > 0) { std::copy_n (fifoLeft.data() + start2, size2, left + size1); std::copy_n (fifoRight.data() + start2, size2, right + size1); }
     fifo.finishedRead (size1 + size2);
     return size1 + size2;
 }

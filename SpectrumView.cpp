@@ -32,30 +32,34 @@ juce::String SpectrumView::formatHz (float hz)
     return juce::String (rounded) + " Hz";
 }
 
-void SpectrumView::pushSamples (const float* samples, int numSamples)
+void SpectrumView::pushSamples (const float* left, const float* right, int numSamples)
 {
     for (int i = 0; i < numSamples; ++i)
     {
-        history[(size_t) historyWritePos] = samples[i];
+        history[(size_t) historyWritePos] = 0.5f * (left[i] + right[i]);   // display only
         historyWritePos = (historyWritePos + 1) % fftSize;
+    }
+    analyzer.push (left, right, numSamples);
+    if (analyzer.takeFinished())
+    {
+        computeReadings();
+        captureDone = true;
     }
 }
 
 void SpectrumView::resetAnalysis()
 {
-    std::fill (averagedPower.begin(), averagedPower.end(), 0.0);
-    capturing = captureDone = hasSnapshot = false;
-    captureFrames = 0;
+    analyzer.reset();
+    captureDone = false;
     readings.clear();
     repaint();
 }
 
 void SpectrumView::startCapture (float seconds)
 {
-    std::fill (averagedPower.begin(), averagedPower.end(), 0.0);
-    captureFrames = 0;
-    captureTarget = juce::jmax (30, (int) (seconds * 30.0f));   // the GUI timer runs at 30 fps
-    capturing = true;
+    if (std::abs (analyzer.getSampleRate() - lastSampleRate) > 1.0)
+        analyzer.prepare (lastSampleRate);
+    analyzer.startCapture (seconds);
     captureDone = false;
     repaint();
 }
@@ -87,12 +91,7 @@ void SpectrumView::updateSpectrum (double sampleRate, bool hasSignal)
     // A full-scale sine reads ~0 dB: Hann window halves amplitude, FFT scales by N/2.
     const float norm = 4.0f / (float) fftSize;
 
-    // During "analyse", every frame with real signal is averaged equally into a snapshot
-    // (silence between hits is skipped). Once enough has been heard, the snapshot freezes.
-    const bool addToSnapshot = capturing && hasSignal;
-    if (addToSnapshot)
-        ++captureFrames;
-
+    juce::ignoreUnused (hasSignal);
     for (size_t bin = 1; bin < smoothedDb.size(); ++bin)
     {
         const float hz = (float) bin * (float) lastSampleRate / (float) fftSize;
@@ -102,162 +101,18 @@ void SpectrumView::updateSpectrum (double sampleRate, bool hasSignal)
         auto& sm = smoothedDb[bin];
         sm = db > sm ? 0.5f * sm + 0.5f * db     // rise quickly
                      : 0.88f * sm + 0.12f * db;  // fall slowly
-
-        if (addToSnapshot)
-            averagedPower[bin] += ((double) mag * (double) mag - averagedPower[bin]) / (double) captureFrames;
-    }
-
-    if (capturing && captureFrames >= captureTarget)
-    {
-        capturing = false;
-        captureDone = true;
-        hasSnapshot = true;
-        computeReadings();
     }
     repaint();
 }
 
 float SpectrumView::averagedDbAt (float hz) const
 {
-    const float binPos = hz * (float) fftSize / (float) lastSampleRate;
-    const int b0 = juce::jlimit (1, (int) averagedPower.size() - 2, (int) binPos);
-    const double frac = juce::jlimit (0.0, 1.0, (double) binPos - b0);
-    const double p = averagedPower[(size_t) b0] * (1.0 - frac) + averagedPower[(size_t) b0 + 1] * frac;
-    return 10.0f * (float) std::log10 (p + 1.0e-20) + tiltDb (hz);
+    return analyzer.levelAt (hz) + tiltDb (hz);
 }
 
 void SpectrumView::computeReadings()
 {
-    readings.assign (zones.size(), {});
-    if (! hasReadings())
-        return;
-
-    // The track's overall average level (30 Hz - 16 kHz), used as the reference
-    // every zone is compared with. This makes the analysis independent of volume.
-    // Frequencies far below the loudest part (e.g. the empty top end of a clean kick) are
-    // clamped to a floor, otherwise near-silence drags the reference down and every zone
-    // looks massively "too loud" no matter how much you cut.
-    constexpr int refPoints = 64;
-    float spectrumMax = -400.0f;
-    for (int i = 0; i < refPoints; ++i)
-        spectrumMax = juce::jmax (spectrumMax, averagedDbAt (30.0f * std::pow (16000.0f / 30.0f, (float) i / (float) (refPoints - 1))));
-    floorDb = spectrumMax - 45.0f;
-
-    double sum = 0.0;
-    for (int i = 0; i < refPoints; ++i)
-        sum += juce::jmax (floorDb, averagedDbAt (30.0f * std::pow (16000.0f / 30.0f, (float) i / (float) (refPoints - 1))));
-    referenceDb = (float) (sum / refPoints);
-
-    const float binHz = (float) lastSampleRate / (float) fftSize;
-
-    // Bump detection: compare each zone with the frequencies just outside it (half an octave
-    // below and above), joined by a straight line, the way you'd spot a bump by eye. A zone
-    // above that line is a build-up; below it is a hole. This adapts to any sound, and an EQ
-    // cut of X dB on a bump shrinks it by about X dB, so re-checks can see your fix.
-    constexpr int perOctave = 24;
-    const float gridLo = 20.0f, gridHi = 20000.0f;
-    const int gridN = (int) (std::log2 (gridHi / gridLo) * perOctave) + 1;
-    std::vector<float> gridHz ((size_t) gridN), level ((size_t) gridN);
-    for (int k = 0; k < gridN; ++k)
-    {
-        gridHz[(size_t) k] = gridLo * std::pow (2.0f, (float) k / perOctave);
-        level[(size_t) k] = juce::jmax (floorDb, averagedDbAt (gridHz[(size_t) k]));
-    }
-    auto meanBetween = [&] (float lo, float hi, int& count)
-    {
-        double acc = 0.0; count = 0;
-        for (int k = 0; k < gridN; ++k)
-            if (gridHz[(size_t) k] >= lo && gridHz[(size_t) k] <= hi) { acc += level[(size_t) k]; ++count; }
-        return count > 0 ? (float) (acc / count) : 0.0f;
-    };
-
-    for (size_t z = 0; z < zones.size(); ++z)
-    {
-        const auto& zone = zones[z];
-        auto& r = readings[z];
-
-        // Average level and loudest point, sampled evenly on a log-frequency scale.
-        constexpr int points = 24;
-        double zoneSum = 0.0;
-        float peakDb = -1000.0f;
-        for (int i = 0; i < points; ++i)
-        {
-            const float hz = zone.lowHz * std::pow (zone.highHz / zone.lowHz, (float) i / (float) (points - 1));
-            const float db = juce::jmax (floorDb, averagedDbAt (hz));
-            zoneSum += db;
-            if (db > peakDb) { peakDb = db; r.peakHz = hz; }
-        }
-
-        r.levelDb = (float) (zoneSum / points);
-        r.relativeDb = r.levelDb - referenceDb;
-
-        {
-            const float halfOct = std::sqrt (2.0f);
-            int nb = 0, na = 0;
-            const float below = meanBetween (zone.lowHz / halfOct, zone.lowHz * 0.97f, nb);
-            const float above = meanBetween (zone.highHz * 1.03f, juce::jmin (gridHi, zone.highHz * halfOct), na);
-            const float xb = std::log2 (zone.lowHz / std::pow (halfOct, 0.5f));    // centre of the band below
-            const float xa = std::log2 (zone.highHz * std::pow (halfOct, 0.5f));   // centre of the band above
-
-            double bumpSum = 0.0; int bumpCount = 0;
-            for (int k = 0; k < gridN; ++k)
-            {
-                const float f = gridHz[(size_t) k];
-                if (f < zone.lowHz || f > zone.highHz) continue;
-                float line;
-                if (nb > 0 && na > 0)  line = below + (above - below) * (std::log2 (f) - xb) / (xa - xb);
-                else if (nb > 0)       line = below;
-                else if (na > 0)       line = above;
-                else                   line = level[(size_t) k];
-                bumpSum += level[(size_t) k] - line;
-                ++bumpCount;
-            }
-            r.bumpDb = bumpCount > 0 ? (float) (bumpSum / bumpCount) : 0.0f;
-        }
-
-        {
-            // Level of the zone against everything at least an octave away from it. A wide EQ cut
-            // also lowers the zone's neighbours (so the bump hardly changes), but it can't reach
-            // this far, so this shows any cut or boost you make on the zone.
-            double acc = 0.0; int count = 0;
-            for (int k = 0; k < gridN; ++k)
-            {
-                const float f = gridHz[(size_t) k];
-                if (f < 30.0f || f > 16000.0f || (f > zone.lowHz * 0.5f && f < zone.highHz * 2.0f)) continue;
-                acc += level[(size_t) k]; ++count;
-            }
-            r.isolatedDb = count > 0 ? r.levelDb - (float) (acc / count) : r.relativeDb;
-        }
-
-        if (r.relativeDb > zone.targetMaxDb)        { r.status = 1;  r.deviationDb = r.relativeDb - zone.targetMaxDb; }
-        else if (r.relativeDb < zone.targetMinDb)   { r.status = -1; r.deviationDb = r.relativeDb - zone.targetMinDb; }
-
-        // Resonance: one narrow frequency sticking out well above the rest of the zone.
-        // Skipped for low zones (too few FFT bins) and boost zones (a peak there is usually wanted).
-        const int firstBin = (int) std::ceil (zone.lowHz / binHz);
-        const int lastBin  = juce::jmin ((int) averagedPower.size() - 1, (int) std::floor (zone.highHz / binHz));
-
-        if (zone.kind != "boost" && zone.lowHz >= 150.0f && lastBin - firstBin >= 8)
-        {
-            std::vector<float> dbs;
-            float peakBinDb = -1000.0f, peakBinHz = 0.0f;
-            for (int b = firstBin; b <= lastBin; ++b)
-            {
-                const float hz = (float) b * binHz;
-                const float db = 10.0f * (float) std::log10 (averagedPower[(size_t) b] + 1.0e-20) + tiltDb (hz);
-                dbs.push_back (db);
-                if (db > peakBinDb) { peakBinDb = db; peakBinHz = hz; }
-            }
-            std::nth_element (dbs.begin(), dbs.begin() + (long) dbs.size() / 2, dbs.end());
-            const float median = dbs[dbs.size() / 2];
-
-            if (peakBinDb - median >= 10.0f)
-            {
-                r.resonanceHz = peakBinHz;
-                r.resonanceDb = peakBinDb - median;
-            }
-        }
-    }
+    readings = analyzer.readZones (zones, referenceDb);
 }
 
 void SpectrumView::setZones (std::vector<mm::Zone> newZones)
@@ -369,7 +224,7 @@ void SpectrumView::paint (juce::Graphics& g)
     g.strokePath (curve, juce::PathStrokeType (1.0f));
 
     // The analysed snapshot (white): frozen once "analyse" / "re-check" has finished
-    if (hasSnapshot || (capturing && captureFrames > 0))
+    if (analyzer.hasResult())
     {
         juce::Path avg;
         for (int px = 0; px <= getWidth(); px += 3)
@@ -420,7 +275,7 @@ void SpectrumView::paint (juce::Graphics& g)
         }
 
         // Highlight the ranges still to fix, with the target range from the analysis
-        if ((mark.state == 1 || mark.state == 2 || mark.state >= 5) && hasSnapshot)
+        if ((mark.state == 1 || mark.state == 2 || mark.state >= 5) && analyzer.hasResult())
         {
             g.setColour (markColour.withAlpha (0.10f));
             g.fillRect (juce::Rectangle<float> (x1, 0.0f, w, bounds.getHeight()));
@@ -475,9 +330,9 @@ void SpectrumView::paint (juce::Graphics& g)
         g.setFont (font (14.0f));
         g.drawText ("pick a genre and instrument to see frequency zones", getLocalBounds(), juce::Justification::centred);
     }
-    else if (capturing)
+    else if (analyzer.isCapturing())
     {
-        const auto text = captureFrames == 0 ? juce::String ("waiting for sound: press play in your DAW")
+        const auto text = ! analyzer.hasHeardSound() ? juce::String ("waiting for sound: press play in your DAW")
                                              : "listening...  " + juce::String ((int) (getCaptureProgress() * 100.0f)) + "%";
         g.setFont (font (13.5f));
         const float tw = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), text) + 32.0f;
@@ -498,7 +353,7 @@ void SpectrumView::paint (juce::Graphics& g)
         const float y = bounds.getBottom() - 40.0f;
         for (auto& k : keys)
         {
-            if (k.style == 0 && ! hasSnapshot) continue;
+            if (k.style == 0 && ! analyzer.hasResult()) continue;
             if (k.style == 0)      { g.setColour (white); g.fillRoundedRectangle (x, y + 5.0f, 14.0f, 2.0f, 1.0f); }
             else if (k.style == 1) { g.setColour (col::liveFill.brighter (0.3f)); g.fillRoundedRectangle (x, y + 1.0f, 14.0f, 10.0f, 2.0f); }
             else                   { g.setColour (white.withAlpha (0.8f)); g.drawRoundedRectangle (x, y + 1.5f, 14.0f, 9.0f, 2.0f, 1.0f); }
@@ -539,16 +394,5 @@ juce::String SpectrumView::getTooltip()
 
 std::vector<float> SpectrumView::getBandLevels() const
 {
-    std::vector<float> out;
-    if (! hasSnapshot)
-        return out;
-    for (int k = 0; k < 31; ++k)
-    {
-        const float centre = 20.0f * std::pow (2.0f, (float) k / 3.0f);
-        double acc = 0.0;
-        for (int j = -2; j <= 2; ++j)
-            acc += std::pow (10.0, averagedDbAt (centre * std::pow (2.0f, (float) j / 18.0f)) / 10.0);
-        out.push_back ((float) (10.0 * std::log10 (juce::jmax (1.0e-20, acc / 5.0))));
-    }
-    return out;
+    return analyzer.thirdOctaveBands();
 }

@@ -105,3 +105,16 @@ Rebuild after editing (the file is compiled into the plugin).
 - Ideas are written by a note model trained on the melodies of the POP909 dataset (909 songs, MIT licence) and scored with classic melody rules: resolve leaps, stable notes on strong beats, one clear high point, end on a stable note.
 - New idea: "fresh rhythm", built from the most common one-bar rhythms in real songs, repeating A A B A.
 - Training scripts: train/train.py, train/gen_header.py.
+
+
+## v1.0: new listening engine
+
+- **Hears every sample.** Analysis runs on audio time, not on window redraws, through a lossless 5-second stereo buffer.
+- **About 2.7 Hz frequency resolution** at any sample rate (was about 11 Hz).
+  - Tonal balance is judged at 1/6 octave.
+  - Resonances are found at full resolution and must ring in at least 75 % of frames.
+  - Harmonics of musical notes are not reported as resonances.
+- **Left and right are measured separately**, so wide or out-of-phase parts no longer cancel.
+- **Quiet frames are ignored**: silence and tails more than 20 dB below the loudest frame.
+- **ITU BS.1770 loudness** with gating, and 4x oversampled true peak.
+- **Verified:** `train/verify_analysis.py` runs the plugin's analysis code (`train/harness`) on test signals with known answers and against pyloudnorm. Result: 45/45 checks pass at 44.1, 48 and 96 kHz.
