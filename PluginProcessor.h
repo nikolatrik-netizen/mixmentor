@@ -38,6 +38,11 @@ struct FixSession
     std::vector<FixIssue> issues;
     juce::StringArray goodZones;
     bool heardChange = true;        // did the last re-check hear any of the user's moves?
+    float baseLoudness = -100.0f;   // loudness of the analysed loop
+    float loopDiffLu = 0.0f;        // re-check loop minus analysed loop
+    std::vector<float> baseBands;   // third-octave spectrum of the analysed loop (to notice a different part of the song)
+    float contentDiffDb = 0.0f;     // how different the re-checked music was, away from the ranges being fixed
+    bool contentMismatch = false;   // last re-check heard different music: results weren't updated
     int checks = 0;
 };
 

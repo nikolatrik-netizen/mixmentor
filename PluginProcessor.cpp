@@ -180,6 +180,11 @@ void MixMentorProcessor::getStateInformation (juce::MemoryBlock& destData)
         fx->setAttribute ("instrument", fixSession.instrumentId);
         fx->setAttribute ("good", fixSession.goodZones.joinIntoString ("|"));
         fx->setAttribute ("checks", fixSession.checks);
+        {
+            juce::StringArray b;
+            for (float v : fixSession.baseBands) b.add (juce::String (v, 2));
+            fx->setAttribute ("bands", b.joinIntoString (" "));
+        }
         for (auto& is : fixSession.issues)
         {
             auto* e = fx->createNewChildElement ("Issue");
@@ -237,6 +242,9 @@ void MixMentorProcessor::setStateInformation (const void* data, int sizeInBytes)
             fixSession.instrumentId = fx->getStringAttribute ("instrument");
             fixSession.goodZones = juce::StringArray::fromTokens (fx->getStringAttribute ("good"), "|", "");
             fixSession.checks = fx->getIntAttribute ("checks");
+            fixSession.baseBands.clear();
+            for (auto& t : juce::StringArray::fromTokens (fx->getStringAttribute ("bands"), " ", ""))
+                if (t.isNotEmpty()) fixSession.baseBands.push_back (t.getFloatValue());
             for (auto* e : fx->getChildWithTagNameIterator ("Issue"))
             {
                 FixIssue is;

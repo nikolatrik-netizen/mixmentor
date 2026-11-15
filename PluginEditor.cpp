@@ -837,7 +837,7 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.fillEllipse (s.getX() + 64.0f + wordW + 5.0f, 44.0f, 6.0f, 6.0f);
     g.setColour (col::textFaint);
     g.setFont (font (11.0f));
-    g.drawText ("learn while you mix   v1.0", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
+    g.drawText ("learn while you mix   v1.1", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
 
     g.setColour (col::border.withAlpha (0.6f));
     g.fillRect (s.getX(), 94.0f, s.getWidth(), 1.0f);
@@ -1231,6 +1231,8 @@ void MixMentorEditor::buildFixList()
 
     FixSession fs;
     fs.valid = true;
+    fs.baseLoudness = dynamics.valid ? dynamics.loudnessLufs : -100.0f;
+    fs.baseBands = spectrum.getBandLevels();
     fs.genreId = kb.genres()[(size_t) g].id;
     fs.instrumentId = kb.instruments()[(size_t) i].id;
 
@@ -1349,6 +1351,44 @@ void MixMentorEditor::recheckFixList()
     if (zones.size() != readings.size())
         return;
 
+    // Is this the same music as the analysed loop? Compare the spectrum away from the ranges being
+    // fixed (so your EQ moves don't count), ignoring overall volume. Two listens of the same bars
+    // match within ~0.1 dB; different bars of a song typically differ by 1.5-3 dB, which would
+    // make the comparison meaningless.
+    {
+        const auto now = spectrum.getBandLevels();
+        fs.contentMismatch = false;
+        fs.contentDiffDb = 0.0f;
+        if (now.size() == fs.baseBands.size() && ! now.empty())
+        {
+            std::vector<float> d;
+            for (size_t k = 0; k < now.size(); ++k)
+            {
+                const float hz = TrackRegistry::bandHz ((int) k);
+                if (hz < 30.0f || hz > 16000.0f) continue;
+                bool nearIssue = false;
+                for (auto& is : fs.issues)
+                    if (is.metric.isEmpty() && hz > is.lowHz / 1.4142f && hz < is.highHz * 1.4142f) nearIssue = true;
+                if (! nearIssue && now[k] > -150.0f && fs.baseBands[k] > -150.0f) d.push_back (now[k] - fs.baseBands[k]);
+            }
+            if (d.size() >= 6)
+            {
+                auto sorted = d;
+                std::nth_element (sorted.begin(), sorted.begin() + (long) sorted.size() / 2, sorted.end());
+                const float median = sorted[sorted.size() / 2];
+                double acc = 0.0;
+                for (float x : d) acc += std::abs (x - median);
+                fs.contentDiffDb = (float) (acc / (double) d.size());
+                fs.contentMismatch = fs.contentDiffDb > 1.0f;
+            }
+        }
+        if (fs.contentMismatch)
+        {
+            ++fs.checks;
+            return;   // don't judge your changes against different music
+        }
+    }
+
     bool heard = false;
     for (auto& is : fs.issues)
     {
@@ -1393,11 +1433,13 @@ void MixMentorEditor::recheckFixList()
         }
 
         const float now = is.bump ? r.bumpDb : r.relativeDb;
-        // Two views of the same range: its shape against its neighbours, and its level against the
-        // far-away rest of the track. A wide EQ move shows up clearly in the second, so take the larger.
+        // What an EQ move on this range changes is its level against the rest of the track (measured
+        // far away from the range, so the cut itself doesn't move the reference). That is the judge.
+        // The shape against the neighbouring frequencies only confirms "fixed": a wide cut also lowers
+        // the neighbours, so the shape can barely move, or even tip the other way, after a correct cut.
         const float shapeChange = (is.baseline - now) * (float) is.action;
-        const float levelChange = (is.baselineLevel - r.isolatedDb) * (float) is.action;
-        const float change = std::abs (levelChange) > std::abs (shapeChange) ? levelChange : shapeChange;
+        const bool haveLevel = std::abs (is.baselineLevel) > 1.0e-4f;   // older saved sessions don't have it
+        const float change = haveLevel ? (is.baselineLevel - r.isolatedDb) * (float) is.action : shapeChange;
         const bool inRange = is.bump ? (is.action > 0 ? now <= 1.5f : now >= -1.5f)
                                      : (is.action > 0 ? now <= zone.targetMaxDb + 1.0f : now >= zone.targetMinDb - 1.0f);
         const float neededChange = juce::jmax (1.5f, juce::jmin (is.amount * 0.6f, is.bump ? std::abs (is.baseline) + 1.0f : 99.0f));
@@ -1405,10 +1447,11 @@ void MixMentorEditor::recheckFixList()
         heard = heard || std::abs (change) >= 1.0f;
         if (inRange || change >= neededChange)                     { is.status = 1; is.fixedValue = r.isolatedDb; }   // fixed
         else if (change >= 0.8f)                                     is.status = 2;   // improved
-        else if (change <= -1.5f)                                    is.status = 4;   // worse
+        else if (change <= -2.0f && shapeChange <= 0.0f)             is.status = 4;   // clearly worse (both agree)
         else                                                         is.status = 3;   // no change heard
     }
     fs.heardChange = heard;
+    fs.loopDiffLu = (dynamics.valid && fs.baseLoudness > -99.0f) ? dynamics.loudnessLufs - fs.baseLoudness : 0.0f;
     ++fs.checks;
 }
 
@@ -1571,6 +1614,12 @@ void MixMentorEditor::refreshFixPanel()
         row.range = fmtRange (is);
         const auto verb = is.action > 0 ? juce::String ("cut") : juce::String ("boost");
         const auto amt = juce::String (juce::roundToInt (is.amount));
+        // After a re-check: what's still left to do, counting what was already done.
+        const auto left = juce::String (juce::jmax (1, juce::roundToInt (is.amount - juce::jmax (0.0f, is.latestChange))));
+        const auto measured = fs.checks > 0
+            ? "Measured since the analysis: " + fmtRange (is) + " is " + juce::String (std::abs (is.latestChange), 1) + " dB "
+              + ((is.latestChange * (float) is.action) >= 0.0f ? "quieter" : "louder") + " compared with the rest of the track. "
+            : juce::String();
         const auto label = is.resonance ? juce::String ("ringing in ") + is.label.toLowerCase() : is.label.toLowerCase();
         const auto moved = juce::String (std::abs (is.latestChange), 1);
 
@@ -1605,15 +1654,15 @@ void MixMentorEditor::refreshFixPanel()
                 break;
             case 2:
                 row.state = 5; ++open;
-                row.chip = verb + " a bit more";
+                row.chip = verb + " ~" + left + " dB more";
                 row.title = label + ": better, moved " + moved + " dB";
-                row.body = "Going the right way. Push a little further, then re-check.";
+                row.body = measured + "Going the right way: " + verb + " about " + left + " dB more (make your EQ band a bit deeper or wider), then re-check.";
                 break;
             case 3:
                 row.state = 6; ++open; ++noChange;
                 row.chip = verb + " ~" + amt + " dB";
                 row.title = label + ": no change heard";
-                row.body = "I didn't hear a change here. Is your EQ band between " + fmtRange (is)
+                row.body = measured + "That's too small to count. Is your EQ band between " + fmtRange (is)
                          + "? Is Mix Mentor after your EQ? " + how;
                 break;
             case 5:
@@ -1626,8 +1675,9 @@ void MixMentorEditor::refreshFixPanel()
             case 4:
                 row.state = 7; ++open;
                 row.chip = verb + " ~" + amt + " dB";
-                row.title = label + ": went the wrong way (" + moved + " dB)";
-                row.body = how;
+                row.title = label + ": got " + (is.action > 0 ? "louder" : "quieter") + " (" + moved + " dB)";
+                row.body = measured + "Check that the EQ band is a " + (is.action > 0 ? "cut (minus)" : "boost (plus)")
+                         + ", on this track, before Mix Mentor, and that the same part of the song is playing. " + how;
                 break;
             default:
                 row.state = is.action > 0 ? 1 : 2; ++open;
@@ -1722,7 +1772,11 @@ void MixMentorEditor::refreshFixPanel()
     }
 
     juce::String warning;
-    if (fs.checks > 0 && open > 0 && noChange == open && ! fs.heardChange)
+    if (fs.checks > 0 && fs.contentMismatch)
+        warning = "This sounded like a different part of the song than the one you analysed, so I didn't update "
+                  "the list (comparing different bars gives false results). Loop exactly the same bars you analysed and "
+                  "press re-check, or press start over to analyse this part.";
+    else if (fs.checks > 0 && open > 0 && noChange == open && ! fs.heardChange)
         warning = "I didn't hear any of your changes. Mix Mentor must be the LAST plugin on this track, "
                   "after your EQ, and the same part of the song should be playing.";
 
