@@ -23,6 +23,12 @@ namespace mm
             for (auto& p : *arr)
                 processes_.push_back ({ p["id"].toString(), p["name"].toString() });
 
+        if (auto* mObj = root["mistakes"].getDynamicObject())
+            for (auto& entry : mObj->getProperties())
+                if (auto* list = entry.value.getArray())
+                    for (auto& m : *list)
+                        mistakes_[entry.name.toString()].add (m.toString());
+
         if (auto* arr = root["instruments"].getArray())
         {
             for (auto& i : *arr)
@@ -49,6 +55,10 @@ namespace mm
                 if (auto* els = g["elements"].getArray())
                     for (auto& e : *els)
                         genre.elements.add (e.toString());
+
+                if (auto* tr = g["tricks"].getArray())
+                    for (auto& t : *tr)
+                        genre.tricks.push_back ({ t["process"].toString(), t["title"].toString(), t["text"].toString() });
 
                 if (auto* steps = g["workflow"].getArray())
                     for (auto& st : *steps)

@@ -5,6 +5,7 @@
 #include "SpectrumView.h"
 #include "MelodyPanel.h"
 #include "SuggestionPanel.h"
+#include "GuidePage.h"
 #include "LiveListener.h"
 #include "Theme.h"
 
@@ -114,7 +115,7 @@ private:
     void timerCallback() override;
     void refreshContent();
     void updateGainStatus();
-    void passComplete();
+    void onNewPass();
     void refreshSuggestions();
     void setReferenceFile (const juce::File&);
     std::vector<SuggestionPanel::Info> findClashes() const;
@@ -136,13 +137,14 @@ private:
     juce::Viewport workflowView;
     SuggestionPanel suggestions;
     BandNumbers bandNumbers;
+    GuidePage guidePage;
     enum Page { pageMix = 0, pageTips, pageWorkflow, pageTheory, pageMelody };
     int page = pageMix;
     void setPage (int index);
     std::vector<int> tipProcesses;
     int workflowProcess = -1, theoryProcess = -1, lastTipProcess = 0;
-    LiveListener listener;
-    bool pendingScan = true;          // look for problems when the next loop is complete
+    LiveListener& listener;           // lives in the processor (listens even while this window is closed)
+    int seenPassEvents = -1, seenBeatEvents = -1;
     juce::TextButton loadRefButton { "load reference..." }, clearRefButton { "use genre" };
     std::unique_ptr<juce::FileChooser> chooser;
     int refreshCounter = 0;
@@ -160,8 +162,6 @@ private:
     int shownGenre = -2, shownInstrument = -2;
 
     std::vector<float> readLeft = std::vector<float> (1 << 15), readRight = std::vector<float> (1 << 15);
-    int lastDropped = 0;
-    double listenerRate = 0.0;
     float peakDisplayDb = -100.0f, holdDb = -100.0f;
     int holdFrames = 0, frameCounter = 0;
 

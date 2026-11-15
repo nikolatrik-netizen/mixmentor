@@ -1021,7 +1021,44 @@
      -7
     ]
    },
-   "theoryText": "TEMPO\nBoom bap 80-100 BPM · trap 130-160 BPM (often ~140) with a half-time feel\n\nGROOVE & DRUMS\nTrap: snare/clap on beat 3 of each bar so the drums feel half-time while hi-hats run at full speed. Hats on 8ths or 16ths with 1/16, 1/32 and triplet rolls, velocity varied, and the occasional open hat choked by the next closed hat.\nBoom bap: kick and snare backbeat (snare on 2 and 4) with extra 16th-note kicks, swung with MPC-style swing. Around 54-58% is the classic hip-hop range; 50% is straight, 66% is full triplet swing.\n\nKEYS & SCALES\nTrap is overwhelmingly minor: C, D, F#, G and A minor are common. Natural minor and harmonic minor cover most of it; Phrygian (minor with a flat 2nd) gives an extra-dark sound.\n\nCOMMON PROGRESSIONS\n•  i - bVI - bVII   (Cm - Ab - Bb)  trap minor\n•  i - bIII - bVI - bVII   (Cm - Eb - Ab - Bb)  dark trap\n•  i - iv - i - bVI   (Am - Dm - Am - F)  boom bap\n•  i - bVII - bVI - V   (Am - G - F - E)  Andalusian cadence, dark and cinematic\n•  I - bVII - IV - I   (C - Bb - F - C)  soul loop, warm 90s feel\n\nPRODUCTION TIPS\nTune the 808 to the key and let it follow the chord roots. Layering a sine an octave above the 808 helps it cut through on small speakers. Use fewer hi-hat rolls than you think: steady hats with a roll at the end of a phrase hit harder.\n\nLOUDNESS\nTypical master: about -10 to -7 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\nBoom bap 80-100 BPM · trap 130-160 BPM (often ~140) with a half-time feel\n\nGROOVE & DRUMS\nTrap: snare/clap on beat 3 of each bar so the drums feel half-time while hi-hats run at full speed. Hats on 8ths or 16ths with 1/16, 1/32 and triplet rolls, velocity varied, and the occasional open hat choked by the next closed hat.\nBoom bap: kick and snare backbeat (snare on 2 and 4) with extra 16th-note kicks, swung with MPC-style swing. Around 54-58% is the classic hip-hop range; 50% is straight, 66% is full triplet swing.\n\nKEYS & SCALES\nTrap is overwhelmingly minor: C, D, F#, G and A minor are common. Natural minor and harmonic minor cover most of it; Phrygian (minor with a flat 2nd) gives an extra-dark sound.\n\nCOMMON PROGRESSIONS\n•  i - bVI - bVII   (Cm - Ab - Bb)  trap minor\n•  i - bIII - bVI - bVII   (Cm - Eb - Ab - Bb)  dark trap\n•  i - iv - i - bVI   (Am - Dm - Am - F)  boom bap\n•  i - bVII - bVI - V   (Am - G - F - E)  Andalusian cadence, dark and cinematic\n•  I - bVII - IV - I   (C - Bb - F - C)  soul loop, warm 90s feel\n\nPRODUCTION TIPS\nTune the 808 to the key and let it follow the chord roots. Layering a sine an octave above the 808 helps it cut through on small speakers. Use fewer hi-hat rolls than you think: steady hats with a roll at the end of a phrase hit harder.\n\nLOUDNESS\nTypical master: about -10 to -7 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "Kick vs 808: split the low end",
+     "text": "Give the 808 the 40-60 Hz fundamental and the kick the 60-100 Hz punch plus a 3-5 kHz click. Small cuts on each where the other one lives (2-3 dB) clear up most low-end mud."
+    },
+    {
+     "process": "eq",
+     "title": "Make the 808 audible on phones",
+     "text": "Phones can't play 50 Hz. Saturate the 808 a little or boost its 2nd harmonic (around 100-160 Hz) so the bassline still reads on small speakers."
+    },
+    {
+     "process": "compression",
+     "title": "Clip the drums instead of crushing them",
+     "text": "A soft clipper on the drum bus shaves 2-4 dB off the peaks without the pumping of a compressor. That is a big part of the loud, punchy trap drum sound."
+    },
+    {
+     "process": "sidechain",
+     "title": "Duck the 808 with the kick",
+     "text": "Compressor on the 808, kick as sidechain: fast attack (0.1-1 ms), 50-120 ms release, 2-6 dB of reduction. Or simply don't let the 808 and kick start on the same 16th."
+    },
+    {
+     "process": "reverb",
+     "title": "Vocal space without wash",
+     "text": "Short plate (0.8-1.5 s) with 20-40 ms pre-delay on a send, high-passed at 300-500 Hz. Keeps the vocal upfront but not dry."
+    },
+    {
+     "process": "delay",
+     "title": "Throw delays on ad-libs",
+     "text": "Automate a 1/4 or dotted-1/8 delay send only on the last word of a line. Filter the delay (HP 300 Hz, LP 5 kHz) so the repeats sit behind the beat."
+    },
+    {
+     "process": "gain",
+     "title": "Balance kick + 808 first",
+     "text": "Set the kick around -8 to -6 dB peak and bring the 808 up until both feel equally loud. Build everything else around those two."
+    }
+   ]
   },
   {
    "id": "lofi",
@@ -1865,7 +1902,44 @@
      -10
     ]
    },
-   "theoryText": "TEMPO\n70-90 BPM\n\nGROOVE & DRUMS\nSwung boom bap: kick and snare like 90s hip-hop (snare on 2 and 4), with heavy swing (about 55-65%), velocity variation and slightly late notes. Straight quantising is the most common lo-fi mistake.\n\nKEYS & SCALES\nBoth major and minor work. The colour comes from extended chords: always use at least 7ths (maj7, m7, dominant 7) and add 9ths for a softer, neo-soul wash.\n\nCOMMON PROGRESSIONS\n•  ii7 - V7 - Imaj7   (Dm7 - G7 - Cmaj7)  the jazz ii-V-I, the backbone of lo-fi\n•  iim7b5 - V7 - im7   (Bm7b5 - E7 - Am7)  minor ii-V-i, melancholic\n•  Imaj7 - vi7 - ii7 - V7   (Cmaj7 - Am7 - Dm7 - G7)  jazz turnaround\n•  Imaj7 - vi7 - IVmaj7 - V7   (Cmaj7 - Am7 - Fmaj7 - G7)  four-chord loop in 7ths\n\nPRODUCTION TIPS\nHold each chord for a bar or more; lo-fi uses jazz harmony but moves slowly. Vinyl crackle, tape saturation and wobble, and a low-pass on the whole loop are part of the genre, not extras.\n\nLOUDNESS\nTypical master: about -14 to -10 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\n70-90 BPM\n\nGROOVE & DRUMS\nSwung boom bap: kick and snare like 90s hip-hop (snare on 2 and 4), with heavy swing (about 55-65%), velocity variation and slightly late notes. Straight quantising is the most common lo-fi mistake.\n\nKEYS & SCALES\nBoth major and minor work. The colour comes from extended chords: always use at least 7ths (maj7, m7, dominant 7) and add 9ths for a softer, neo-soul wash.\n\nCOMMON PROGRESSIONS\n•  ii7 - V7 - Imaj7   (Dm7 - G7 - Cmaj7)  the jazz ii-V-I, the backbone of lo-fi\n•  iim7b5 - V7 - im7   (Bm7b5 - E7 - Am7)  minor ii-V-i, melancholic\n•  Imaj7 - vi7 - ii7 - V7   (Cmaj7 - Am7 - Dm7 - G7)  jazz turnaround\n•  Imaj7 - vi7 - IVmaj7 - V7   (Cmaj7 - Am7 - Fmaj7 - G7)  four-chord loop in 7ths\n\nPRODUCTION TIPS\nHold each chord for a bar or more; lo-fi uses jazz harmony but moves slowly. Vinyl crackle, tape saturation and wobble, and a low-pass on the whole loop are part of the genre, not extras.\n\nLOUDNESS\nTypical master: about -14 to -10 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "Roll off the top for that dusty sound",
+     "text": "A low-pass on the drum bus or the whole beat at 8-12 kHz, and a gentle high-pass at 30-40 Hz, gives the soft, warm lo-fi tone without losing clarity."
+    },
+    {
+     "process": "eq",
+     "title": "Thin the samples, not the bass",
+     "text": "Vinyl-style samples carry a lot of low-mid: cut 200-400 Hz on chords and keys so the bass has room."
+    },
+    {
+     "process": "compression",
+     "title": "Glue with slow compression",
+     "text": "Drum bus: 2:1-4:1, 30 ms attack, auto release, 2-3 dB. Soft and breathing rather than squashed."
+    },
+    {
+     "process": "sidechain",
+     "title": "Gentle pumping on the chords",
+     "text": "A subtle sidechain (1-3 dB, 100-200 ms release) from the kick on the chords adds the laid-back sway without obvious pumping."
+    },
+    {
+     "process": "reverb",
+     "title": "Small rooms over big halls",
+     "text": "Use short room or spring reverbs (0.5-1.2 s). Big halls wash out the intimate, bedroom character."
+    },
+    {
+     "process": "delay",
+     "title": "Tape-style delay with wobble",
+     "text": "A tape delay with a little wow/flutter and darkened repeats (LP 3-5 kHz) on keys or guitar adds movement and nostalgia."
+    },
+    {
+     "process": "gain",
+     "title": "Leave headroom for the texture",
+     "text": "Vinyl crackle and tape hiss should sit 20-30 dB below the music. If you notice them before the drums, they are too loud."
+    }
+   ]
   },
   {
    "id": "pop",
@@ -2709,7 +2783,44 @@
      -8
     ]
    },
-   "theoryText": "TEMPO\nTypically 100-130 BPM (ballads slower)\n\nGROOVE & DRUMS\nClean, tight drums that support the vocal: kick and snare backbeat, with the arrangement building energy into each chorus.\n\nKEYS & SCALES\nPop uses both major and minor keys. Choose the key that suits the singer's range. Transposing a progression is the easy way to fit a voice.\n\nCOMMON PROGRESSIONS\n•  I - V - vi - IV   (C - G - Am - F)  the 'four-chord song', the most common pop loop\n•  vi - IV - I - V   (Am - F - C - G)  the same chords starting on the minor, more emotional\n•  I - vi - IV - V   (C - Am - F - G)  the 50s/doo-wop progression\n•  IV - V - vi - I   (F - G - Am - C)  increasingly common in pop since about 2010\n\nPRODUCTION TIPS\nI, IV, V and vi are the most common chords in pop. Variety usually comes from rhythm, melody and production rather than complex harmony.\n\nLOUDNESS\nTypical master: about -11 to -8 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\nTypically 100-130 BPM (ballads slower)\n\nGROOVE & DRUMS\nClean, tight drums that support the vocal: kick and snare backbeat, with the arrangement building energy into each chorus.\n\nKEYS & SCALES\nPop uses both major and minor keys. Choose the key that suits the singer's range. Transposing a progression is the easy way to fit a voice.\n\nCOMMON PROGRESSIONS\n•  I - V - vi - IV   (C - G - Am - F)  the 'four-chord song', the most common pop loop\n•  vi - IV - I - V   (Am - F - C - G)  the same chords starting on the minor, more emotional\n•  I - vi - IV - V   (C - Am - F - G)  the 50s/doo-wop progression\n•  IV - V - vi - I   (F - G - Am - C)  increasingly common in pop since about 2010\n\nPRODUCTION TIPS\nI, IV, V and vi are the most common chords in pop. Variety usually comes from rhythm, melody and production rather than complex harmony.\n\nLOUDNESS\nTypical master: about -11 to -8 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "The vocal comes first",
+     "text": "High-pass the vocal at 80-120 Hz, tame 200-400 Hz if it sounds boxy, and add a gentle air shelf (+1-3 dB from 10-12 kHz). Then carve 2-4 kHz on guitars/synths to let it through."
+    },
+    {
+     "process": "eq",
+     "title": "Clean low end",
+     "text": "High-pass everything that isn't kick or bass (guitars, keys, pads) around 100-200 Hz. Pop lives on a clear, controlled low end."
+    },
+    {
+     "process": "compression",
+     "title": "Two compressors on the vocal",
+     "text": "A fast one (FET style, 2-4 dB) for peaks, then a slower optical one (2-3 dB) for evenness. Two light stages sound more natural than one heavy one."
+    },
+    {
+     "process": "sidechain",
+     "title": "Duck the instruments under the vocal",
+     "text": "A dynamic EQ band at 2-4 kHz on the instrument bus, sidechained from the vocal, dips 2-3 dB only while the singer sings."
+    },
+    {
+     "process": "reverb",
+     "title": "Short plate + long hall",
+     "text": "Combine a short plate (1-1.5 s) for body and a long, quiet hall (2.5-3.5 s) for size. EQ both returns (HP 300 Hz, LP 8 kHz)."
+    },
+    {
+     "process": "delay",
+     "title": "1/8 slap for width",
+     "text": "A quiet 1/8-note or 80-120 ms slap delay on the vocal makes it bigger without it feeling far away."
+    },
+    {
+     "process": "gain",
+     "title": "Ride the vocal",
+     "text": "Automate the vocal level line by line. Pop vocals stay at a constant perceived level; compression alone rarely gets there."
+    }
+   ]
   },
   {
    "id": "house",
@@ -3553,7 +3664,44 @@
      -6
     ]
    },
-   "theoryText": "TEMPO\n120-128 BPM (124-128 is the classic sweet spot; deep house 118-124)\n\nGROOVE & DRUMS\nFour-on-the-floor kick, clap or snare on 2 and 4, open hats on every offbeat, 16th shakers. Chord stabs and bass often play in the gaps between each other, a call-and-response that creates groove.\n\nKEYS & SCALES\nHouse leans on minor keys (A minor and its relatives are very common), with jazzy minor 7th and 9th chords. Gospel-style major lifts appear in classic Chicago house.\n\nCOMMON PROGRESSIONS\n•  i7 - bVII - bVI - V7   (Am7 - G - F - E7)  classic minor vamp, gospel-influenced\n•  i7 - v7 - iv7   (Am7 - Em7 - Dm7)  simple deep-house minor 7ths\n•  IV - I   (F - C)  gospel house lift (major)\n•  i - bVII - bVI - bVII   (Am - G - F - G)  funky four-chord loop\n\nPRODUCTION TIPS\nUse Rhodes, organ, piano or warm pads for chords, and try different voicings of the same chord in a row. Deep-house basslines roll (root, root, 5th, root) with a little glide between notes.\n\nLOUDNESS\nTypical master: about -9 to -6 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\n120-128 BPM (124-128 is the classic sweet spot; deep house 118-124)\n\nGROOVE & DRUMS\nFour-on-the-floor kick, clap or snare on 2 and 4, open hats on every offbeat, 16th shakers. Chord stabs and bass often play in the gaps between each other, a call-and-response that creates groove.\n\nKEYS & SCALES\nHouse leans on minor keys (A minor and its relatives are very common), with jazzy minor 7th and 9th chords. Gospel-style major lifts appear in classic Chicago house.\n\nCOMMON PROGRESSIONS\n•  i7 - bVII - bVI - V7   (Am7 - G - F - E7)  classic minor vamp, gospel-influenced\n•  i7 - v7 - iv7   (Am7 - Em7 - Dm7)  simple deep-house minor 7ths\n•  IV - I   (F - C)  gospel house lift (major)\n•  i - bVII - bVI - bVII   (Am - G - F - G)  funky four-chord loop\n\nPRODUCTION TIPS\nUse Rhodes, organ, piano or warm pads for chords, and try different voicings of the same chord in a row. Deep-house basslines roll (root, root, 5th, root) with a little glide between notes.\n\nLOUDNESS\nTypical master: about -9 to -6 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "Kick and bass take turns",
+     "text": "Classic house: kick on the beat, bass on the offbeat. High-pass the bass slightly (30-40 Hz) and cut a little 50-60 Hz in it so the kick owns the sub."
+    },
+    {
+     "process": "eq",
+     "title": "Bright, clean hats",
+     "text": "Hats live at 8-12 kHz. High-pass them at 300-500 Hz so they don't add mud, and keep them slightly to the side."
+    },
+    {
+     "process": "compression",
+     "title": "Bus compression for groove",
+     "text": "Drum bus 4:1, 10-30 ms attack, release timed to the tempo (about 1/16 note), 2-4 dB. It makes the groove breathe with the beat."
+    },
+    {
+     "process": "sidechain",
+     "title": "The house pump",
+     "text": "Sidechain chords, pads and bass to the kick: 4-8 dB, release around a 1/8 note. The pumping is part of the sound, not a fix."
+    },
+    {
+     "process": "reverb",
+     "title": "Dry low end, wet top",
+     "text": "Put reverb on claps, hats and stabs, but high-pass the reverb return at 200-300 Hz so the low end stays tight for the club."
+    },
+    {
+     "process": "delay",
+     "title": "Dotted 1/8 on stabs",
+     "text": "A dotted-1/8 delay on chord stabs and vocal chops creates the rolling groove. Filter the repeats so they sit back."
+    },
+    {
+     "process": "gain",
+     "title": "Kick at -6 dB, rest around it",
+     "text": "Start with the kick peaking around -6 dBFS and mix everything else to it. In house the kick is the reference for everything."
+    }
+   ]
   },
   {
    "id": "ukg",
@@ -4392,7 +4540,44 @@
      -6
     ]
    },
-   "theoryText": "TEMPO\n130-135 BPM for classic 2-step (UKG overall 130-138; speed garage 138-142)\n\nGROOVE & DRUMS\n2-step: the kick skips the regular quarter notes, typically on 16th-steps 1 and 11, with the snare on 5 and 13 (beats 2 and 4). Open hats on the offbeats, swung 16th closed hats. Swing of about 55-58% on 16ths is what makes it garage rather than house.\n\nKEYS & SCALES\nMinor keys with soulful extensions: 7ths, 9ths and sus chords on organ (M1-style), Rhodes or piano.\n\nCOMMON PROGRESSIONS\n•  i7 - iv7   (Am7 - Dm7)  two-chord soulful vamp\n•  i9 - bVII - bVI   (Am9 - G - F)  minor lift with extensions\n•  iim7b5 - V7 - i   (Bm7b5 - E7 - Am)  R&B-style minor turnaround\n\nPRODUCTION TIPS\nChop and pitch vocals and lock them to the swing. Bass is subby and repetitive, often a rolling sub or organ bass that talks with the kick.\n\nLOUDNESS\nTypical master: about -9 to -6 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\n130-135 BPM for classic 2-step (UKG overall 130-138; speed garage 138-142)\n\nGROOVE & DRUMS\n2-step: the kick skips the regular quarter notes, typically on 16th-steps 1 and 11, with the snare on 5 and 13 (beats 2 and 4). Open hats on the offbeats, swung 16th closed hats. Swing of about 55-58% on 16ths is what makes it garage rather than house.\n\nKEYS & SCALES\nMinor keys with soulful extensions: 7ths, 9ths and sus chords on organ (M1-style), Rhodes or piano.\n\nCOMMON PROGRESSIONS\n•  i7 - iv7   (Am7 - Dm7)  two-chord soulful vamp\n•  i9 - bVII - bVI   (Am9 - G - F)  minor lift with extensions\n•  iim7b5 - V7 - i   (Bm7b5 - E7 - Am)  R&B-style minor turnaround\n\nPRODUCTION TIPS\nChop and pitch vocals and lock them to the swing. Bass is subby and repetitive, often a rolling sub or organ bass that talks with the kick.\n\nLOUDNESS\nTypical master: about -9 to -6 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "Keep the sub round",
+     "text": "UKG basslines are bouncy subs: low-pass the sub around 120-200 Hz, and layer a separate mid bass if you need it to cut through."
+    },
+    {
+     "process": "eq",
+     "title": "Crisp shuffled hats",
+     "text": "Boost a little 8-10 kHz on the hats and roll off below 400 Hz. The swing should be heard clearly, not felt as mush."
+    },
+    {
+     "process": "compression",
+     "title": "Snappy drums",
+     "text": "Snare and clap: 4:1, 3-10 ms attack, short release. Keeps the 2-step shuffle sharp."
+    },
+    {
+     "process": "sidechain",
+     "title": "Sidechain the sub to kick and snare",
+     "text": "2-step kicks fall in odd places: sidechain the sub from the kick (and lightly from the snare) so every hit punches through."
+    },
+    {
+     "process": "reverb",
+     "title": "Short reverbs on vocal chops",
+     "text": "Pitched vocal chops get a short plate (0.6-1 s). Long tails smear the syncopation."
+    },
+    {
+     "process": "delay",
+     "title": "Triplet delays for swing",
+     "text": "A 1/8-triplet delay on chops or percussion adds extra swing that fits the shuffle."
+    },
+    {
+     "process": "gain",
+     "title": "Leave space for the swing",
+     "text": "Keep percussion 8-12 dB below the kick. In UKG the groove comes from the gaps."
+    }
+   ]
   },
   {
    "id": "techno",
@@ -5231,7 +5416,44 @@
      -6
     ]
    },
-   "theoryText": "TEMPO\n125-150 BPM (Berlin-style 135-140; hard techno 145-160)\n\nGROOVE & DRUMS\nFour-on-the-floor kick, driving 16th hats and rides. Repetition is the core idea; movement comes from filters, decays and automation rather than new parts. Syncopated percussion that feels like a different tempo is a common attention-grabber.\n\nKEYS & SCALES\nMinor and modal, especially Phrygian (flat 2nd) for a dark, threatening sound. Many tracks use only 2-3 notes, or no fixed key at all. Tune the kick to the key.\n\nCOMMON PROGRESSIONS\n•  i (pedal)   (Am held, with movement from filters)  one-chord hypnosis\n•  i - bII   (Am - Bb)  Phrygian two-chord tension\n•  i7 stabs   (Am7 / Dm7 stabs off the beat)  dub-techno chord stabs\n\nPRODUCTION TIPS\nThe classic rumble: send the kick to a long (often convolution) reverb, low-pass and distort the return, then sidechain it to the kick so it pumps between hits.\n\nLOUDNESS\nTypical master: about -9 to -6 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\n125-150 BPM (Berlin-style 135-140; hard techno 145-160)\n\nGROOVE & DRUMS\nFour-on-the-floor kick, driving 16th hats and rides. Repetition is the core idea; movement comes from filters, decays and automation rather than new parts. Syncopated percussion that feels like a different tempo is a common attention-grabber.\n\nKEYS & SCALES\nMinor and modal, especially Phrygian (flat 2nd) for a dark, threatening sound. Many tracks use only 2-3 notes, or no fixed key at all. Tune the kick to the key.\n\nCOMMON PROGRESSIONS\n•  i (pedal)   (Am held, with movement from filters)  one-chord hypnosis\n•  i - bII   (Am - Bb)  Phrygian two-chord tension\n•  i7 stabs   (Am7 / Dm7 stabs off the beat)  dub-techno chord stabs\n\nPRODUCTION TIPS\nThe classic rumble: send the kick to a long (often convolution) reverb, low-pass and distort the return, then sidechain it to the kick so it pumps between hits.\n\nLOUDNESS\nTypical master: about -9 to -6 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "Kick rumble: the techno low end",
+     "text": "Feed the kick into a long reverb, low-pass the return at 100-200 Hz, then sidechain it from the dry kick. That rumble is the bassline in a lot of techno."
+    },
+    {
+     "process": "eq",
+     "title": "Tame harsh synths",
+     "text": "Hypnotic synths can get harsh at 2-5 kHz on big systems: a dynamic EQ band there keeps them aggressive but not tiring."
+    },
+    {
+     "process": "compression",
+     "title": "Parallel drums",
+     "text": "Send the drums to a heavily compressed bus (10:1, fast attack, 10+ dB) and blend it in quietly under the dry drums for weight."
+    },
+    {
+     "process": "sidechain",
+     "title": "Duck everything to the kick",
+     "text": "Rumble, pads and percussion all ducked from the kick (4-10 dB, fast release) keeps the kick clear even in dense tracks."
+    },
+    {
+     "process": "reverb",
+     "title": "Huge spaces, high-passed",
+     "text": "Long reverbs (4-8 s) on percussion and stabs create depth. Always high-pass the return at 200-400 Hz."
+    },
+    {
+     "process": "delay",
+     "title": "Filtered feedback delays",
+     "text": "Automate the feedback and a filter on a delay over 16-32 bars: the evolving echoes are a main source of movement in techno."
+    },
+    {
+     "process": "gain",
+     "title": "Keep the kick dominant",
+     "text": "Leave the kick 2-4 dB above everything else at the drop. If the kick disappears when the bass comes in, the low end needs work."
+    }
+   ]
   },
   {
    "id": "trance",
@@ -6075,7 +6297,44 @@
      -6
     ]
    },
-   "theoryText": "TEMPO\n134-140 BPM (138 is the classic uplifting tempo)\n\nGROOVE & DRUMS\nFour-on-the-floor kick with no swing, clap on 2 and 4, open hats on the offbeats, 16th shakers. A rolling offbeat bass plays in the gaps between kicks and is sidechained so the track pumps.\n\nKEYS & SCALES\nTrance overwhelmingly favours minor keys (A, D, F# and G minor are common), lifting to major chords for the emotional moments.\n\nCOMMON PROGRESSIONS\n•  i - VI - III - VII   (Am - F - C - G)  the classic uplifting trance progression\n•  i - bVI - bVII - i   (Am - F - G - Am)  anthemic minor lift\n•  i - iv - bVI - bVII   (Fm - Bbm - Db - Eb)  emotional breakdown progression\n•  i - bVI - bVII - V   (Am - F - G - E)  tension before the drop\n\nPRODUCTION TIPS\nLet a 16th-note arpeggio trace the chords, and save the full supersaw lead for after the long breakdown and build.\n\nLOUDNESS\nTypical master: about -9 to -6 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\n134-140 BPM (138 is the classic uplifting tempo)\n\nGROOVE & DRUMS\nFour-on-the-floor kick with no swing, clap on 2 and 4, open hats on the offbeats, 16th shakers. A rolling offbeat bass plays in the gaps between kicks and is sidechained so the track pumps.\n\nKEYS & SCALES\nTrance overwhelmingly favours minor keys (A, D, F# and G minor are common), lifting to major chords for the emotional moments.\n\nCOMMON PROGRESSIONS\n•  i - VI - III - VII   (Am - F - C - G)  the classic uplifting trance progression\n•  i - bVI - bVII - i   (Am - F - G - Am)  anthemic minor lift\n•  i - iv - bVI - bVII   (Fm - Bbm - Db - Eb)  emotional breakdown progression\n•  i - bVI - bVII - V   (Am - F - G - E)  tension before the drop\n\nPRODUCTION TIPS\nLet a 16th-note arpeggio trace the chords, and save the full supersaw lead for after the long breakdown and build.\n\nLOUDNESS\nTypical master: about -9 to -6 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "Supersaws: cut the lows, keep the air",
+     "text": "High-pass the lead and pads at 150-300 Hz and add a gentle shelf above 8-10 kHz. The width and brightness carry the emotion."
+    },
+    {
+     "process": "eq",
+     "title": "Rolling bass offbeat",
+     "text": "Trance bass often plays 16ths on the offbeats: high-pass it around 40 Hz and keep the kick alone in the sub."
+    },
+    {
+     "process": "compression",
+     "title": "Glue the lead stack",
+     "text": "Lead bus: 2:1-4:1, 10-20 ms attack, 2-3 dB. Layered supersaws feel like one instrument."
+    },
+    {
+     "process": "sidechain",
+     "title": "Strong pumping on pads and leads",
+     "text": "Sidechain the pads and leads 6-10 dB to the kick. The pumping drives the uplifting energy."
+    },
+    {
+     "process": "reverb",
+     "title": "Big hall on the lead",
+     "text": "A long hall (3-5 s) on the lead with 50-80 ms pre-delay keeps it clear but huge. Automate it up in the breakdown."
+    },
+    {
+     "process": "delay",
+     "title": "1/8 + dotted 1/8 ping-pong",
+     "text": "Combine a 1/8 and a dotted-1/8 ping-pong delay on the lead for the classic wide, cascading trance sound."
+    },
+    {
+     "process": "gain",
+     "title": "Breakdown vs drop",
+     "text": "Make the breakdown 3-6 dB quieter than the drop so the drop hits harder. Contrast creates the impact."
+    }
+   ]
   },
   {
    "id": "dnb",
@@ -6914,7 +7173,44 @@
      -5
     ]
    },
-   "theoryText": "TEMPO\n172-176 BPM (174 is the standard); the groove feels half-time, around 86-88 BPM\n\nGROOVE & DRUMS\nTwo-step pattern: kick on beat 1, snares on beats 2 and 4, with chopped breakbeats (e.g. the Amen break) and ghost hits in between. The snare is bright and cracking and must cut through the reese.\n\nKEYS & SCALES\nMostly minor. Tune the sub and reese precisely to the track's root note; producers even transpose whole tracks a semitone or two to get the kick and bass to sit together.\n\nCOMMON PROGRESSIONS\n•  i - bVI - bIII - bVII   (Am - F - C - G)  liquid DnB minor progression\n•  i - iv   (Am - Dm)  two-chord minor vamp for neuro/jump-up\n•  im9 - bVImaj7   (Am9 - Fmaj7)  lush liquid extended chords\n\nPRODUCTION TIPS\nSplit the low end into two jobs: a clean sine/triangle sub that locks to the kick, and a reese (detuned saws) above it for movement. Never let the sub and reese peak at full level at the same time. Dotted-1/8 delays suit DnB FX sends.\n\nLOUDNESS\nTypical master: about -8 to -5 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\n172-176 BPM (174 is the standard); the groove feels half-time, around 86-88 BPM\n\nGROOVE & DRUMS\nTwo-step pattern: kick on beat 1, snares on beats 2 and 4, with chopped breakbeats (e.g. the Amen break) and ghost hits in between. The snare is bright and cracking and must cut through the reese.\n\nKEYS & SCALES\nMostly minor. Tune the sub and reese precisely to the track's root note; producers even transpose whole tracks a semitone or two to get the kick and bass to sit together.\n\nCOMMON PROGRESSIONS\n•  i - bVI - bIII - bVII   (Am - F - C - G)  liquid DnB minor progression\n•  i - iv   (Am - Dm)  two-chord minor vamp for neuro/jump-up\n•  im9 - bVImaj7   (Am9 - Fmaj7)  lush liquid extended chords\n\nPRODUCTION TIPS\nSplit the low end into two jobs: a clean sine/triangle sub that locks to the kick, and a reese (detuned saws) above it for movement. Never let the sub and reese peak at full level at the same time. Dotted-1/8 delays suit DnB FX sends.\n\nLOUDNESS\nTypical master: about -8 to -5 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "Separate sub and reese",
+     "text": "Split the bass into a clean sub below 100-120 Hz and a mid \"reese\" above. Process them separately: mono and clean low, distorted and wide high."
+    },
+    {
+     "process": "eq",
+     "title": "Snare crack at 200 Hz and 4-6 kHz",
+     "text": "DnB snares need body around 180-250 Hz and crack around 4-6 kHz. They have to cut through a very busy mid range."
+    },
+    {
+     "process": "compression",
+     "title": "Bus compression + clipping",
+     "text": "Drum bus 4:1, fast attack, then a clipper to catch peaks. DnB drums are loud and dense but still need transients."
+    },
+    {
+     "process": "sidechain",
+     "title": "Duck the reese to the drums",
+     "text": "Sidechain the mid bass from kick and snare (3-6 dB, fast release) so the breakbeat stays in front."
+    },
+    {
+     "process": "reverb",
+     "title": "Short reverbs on breaks",
+     "text": "Keep breaks fairly dry: a short room (0.3-0.8 s) adds life without blurring 174 BPM drums."
+    },
+    {
+     "process": "delay",
+     "title": "Synced 1/16 delays on fills",
+     "text": "1/16 and 1/8-triplet delays on fills and vocal chops add energy at high tempo."
+    },
+    {
+     "process": "gain",
+     "title": "Sub in mono, below the snare",
+     "text": "Keep the sub mono and slightly below the snare in loudness. Too much sub makes DnB sound slow and heavy."
+    }
+   ]
   },
   {
    "id": "dubstep",
@@ -7753,7 +8049,44 @@
      -4
     ]
    },
-   "theoryText": "TEMPO\n140 BPM is the centre (138-145; riddim 140-150), felt as half-time ~70 BPM\n\nGROOVE & DRUMS\nKick on beat 1 (sometimes also the 'and' of 2), snare or clap hard on beat 3, the defining half-time backbeat. Sparse hats and percussion with swung or triplet feels. Space between hits is where the bass lives.\n\nKEYS & SCALES\nMinor keys (A, D, C and F minor are common). Riddim is built on one tight, metallic bass motif that loops and evolves through modulation rather than changing notes.\n\nCOMMON PROGRESSIONS\n•  i - iv - i   (Fm - Bbm - Fm)  simple minor drop harmony\n•  i - bVI - bVII   (Am - F - G)  melodic dubstep intros and builds\n•  i (pedal)   (one root note, bass call-and-response)  riddim: rhythm over harmony\n\nPRODUCTION TIPS\nKeep a separate clean sub and high-pass every growl layer above it. In riddim, layering the kick on the beat-3 snare creates the stomping feel.\n\nLOUDNESS\nTypical master: about -7 to -4 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\n140 BPM is the centre (138-145; riddim 140-150), felt as half-time ~70 BPM\n\nGROOVE & DRUMS\nKick on beat 1 (sometimes also the 'and' of 2), snare or clap hard on beat 3, the defining half-time backbeat. Sparse hats and percussion with swung or triplet feels. Space between hits is where the bass lives.\n\nKEYS & SCALES\nMinor keys (A, D, C and F minor are common). Riddim is built on one tight, metallic bass motif that loops and evolves through modulation rather than changing notes.\n\nCOMMON PROGRESSIONS\n•  i - iv - i   (Fm - Bbm - Fm)  simple minor drop harmony\n•  i - bVI - bVII   (Am - F - G)  melodic dubstep intros and builds\n•  i (pedal)   (one root note, bass call-and-response)  riddim: rhythm over harmony\n\nPRODUCTION TIPS\nKeep a separate clean sub and high-pass every growl layer above it. In riddim, layering the kick on the beat-3 snare creates the stomping feel.\n\nLOUDNESS\nTypical master: about -7 to -4 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "Split the growl into bands",
+     "text": "Process the growl bass in 3 bands: clean mono sub below 100 Hz, mids (100 Hz-2 kHz) distorted, highs (2 kHz+) wider and filtered."
+    },
+    {
+     "process": "eq",
+     "title": "Notch the harsh peaks",
+     "text": "Heavy distortion creates whistling resonances: find them with a narrow boost sweep and cut 3-6 dB with Q 6-10."
+    },
+    {
+     "process": "compression",
+     "title": "OTT on the mid bass",
+     "text": "Multiband upward/downward compression (OTT style) at 20-40% mix makes basses aggressive and present. Watch the high end."
+    },
+    {
+     "process": "sidechain",
+     "title": "Make room for the snare",
+     "text": "Half-time dubstep lives on kick and snare: sidechain the bass from both (4-8 dB) so they hit through the wall of bass."
+    },
+    {
+     "process": "reverb",
+     "title": "Reverb on the snare tail only",
+     "text": "Gate or short-tail the snare reverb so the space between hits stays clean. Big snare plus silence equals impact."
+    },
+    {
+     "process": "delay",
+     "title": "Delay throws in the build",
+     "text": "Long feedback delays on vocal or FX before the drop, automated up, then cut dead at the drop."
+    },
+    {
+     "process": "gain",
+     "title": "Leave 3-6 dB for the drop",
+     "text": "Mix the drop with headroom: the master limiter should only take 2-4 dB. Over-limited dubstep loses all its weight."
+    }
+   ]
   },
   {
    "id": "futurebass",
@@ -8592,7 +8925,44 @@
      -6
     ]
    },
-   "theoryText": "TEMPO\n140-160 BPM (often 150), felt as half-time\n\nGROOVE & DRUMS\nTrap-influenced half-time drums: snare on beat 3, hats with rolls and triplets. In modern future bass the snare is often louder than the kick.\n\nKEYS & SCALES\nMajor and minor both work; the emotion comes from extended chords (7ths, 9ths, add9) on detuned supersaws.\n\nCOMMON PROGRESSIONS\n•  I - IV - V - vi   (C - F - G - Am)  bright and uplifting\n•  vi - IV - I - V   (Am - F - C - G)  emotional\n•  Imaj7 - vi7 - iii7   (Cmaj7 - Am7 - Em7)  lush extended chords\n\nPRODUCTION TIPS\nBend the chords into place with a pitch envelope or LFO; that wobble is the genre's signature. Sidechain chords hard to the kick (attack ~0 ms, release 100-200 ms, ratio 4:1 or more). Keep the sub mono while widening chords and leads. The mid-bass follows the chord roots.\n\nLOUDNESS\nTypical master: about -9 to -6 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\n140-160 BPM (often 150), felt as half-time\n\nGROOVE & DRUMS\nTrap-influenced half-time drums: snare on beat 3, hats with rolls and triplets. In modern future bass the snare is often louder than the kick.\n\nKEYS & SCALES\nMajor and minor both work; the emotion comes from extended chords (7ths, 9ths, add9) on detuned supersaws.\n\nCOMMON PROGRESSIONS\n•  I - IV - V - vi   (C - F - G - Am)  bright and uplifting\n•  vi - IV - I - V   (Am - F - C - G)  emotional\n•  Imaj7 - vi7 - iii7   (Cmaj7 - Am7 - Em7)  lush extended chords\n\nPRODUCTION TIPS\nBend the chords into place with a pitch envelope or LFO; that wobble is the genre's signature. Sidechain chords hard to the kick (attack ~0 ms, release 100-200 ms, ratio 4:1 or more). Keep the sub mono while widening chords and leads. The mid-bass follows the chord roots.\n\nLOUDNESS\nTypical master: about -9 to -6 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "Big chords, clean low-mids",
+     "text": "Wide supersaw chords build up at 200-500 Hz: high-pass them around 150-250 Hz and leave the low end to the 808/bass."
+    },
+    {
+     "process": "eq",
+     "title": "Shiny top end",
+     "text": "Add a gentle shelf (+2-3 dB from 8-10 kHz) on the chord bus for the glossy future bass sound."
+    },
+    {
+     "process": "compression",
+     "title": "OTT on the chords",
+     "text": "OTT-style multiband compression at 20-50% mix brings out detail and loudness in the chords."
+    },
+    {
+     "process": "sidechain",
+     "title": "Volume shaping on the chords",
+     "text": "Use a volume-shaper (LFO tool) synced to the beat on the chords for the deep \"wobble\" swells. It's more controlled than a compressor."
+    },
+    {
+     "process": "reverb",
+     "title": "Lush but ducked reverb",
+     "text": "Big reverb on the chords, sidechained from the kick (or the dry chords), so the space blooms between hits."
+    },
+    {
+     "process": "delay",
+     "title": "Ping-pong on vocal chops",
+     "text": "A 1/8 or dotted-1/8 ping-pong on the pitched chops widens them. Filter the repeats darker."
+    },
+    {
+     "process": "gain",
+     "title": "Chords loud, drums punchy",
+     "text": "The chords are the hero: mix them 1-3 dB below the kick and snare peaks and let the sidechain create the movement."
+    }
+   ]
   },
   {
    "id": "ambient",
@@ -9431,7 +9801,76 @@
      -14
     ]
    },
-   "theoryText": "TEMPO\nNo fixed tempo (free time, or slow up to ~120 BPM)\n\nGROOVE & DRUMS\nTexture over groove: layers fade in and out over many bars, usually one at a time. Pads with slow attacks (1-8 s) avoid percussive entries.\n\nKEYS & SCALES\nLydian (major with a raised 4th) is the signature dreamy, floating mode. Major or minor pentatonic avoids clashes; Dorian and natural minor suit darker moods.\n\nCOMMON PROGRESSIONS\n•  I - IV (rocking)   (C - F)  two chords alternating slowly\n•  I - II (Lydian)   (C - D/C)  floating Lydian colour over a C drone\n•  Isus2 - IVadd9   (Csus2 - Fadd9)  open, unresolved voicings\n\nPRODUCTION TIPS\nHold a long drone on the root an octave or two below the chords; the gentle rub as chords move is a big part of the sound. Use open voicings spread over 2-3 octaves. Long reverbs (often 4-15 s) are central, but EQ the returns so they don't turn to mush.\n\nLOUDNESS\nTypical master: about -18 to -14 LUFS integrated, true peak -1 dBTP or lower."
+   "theoryText": "TEMPO\nNo fixed tempo (free time, or slow up to ~120 BPM)\n\nGROOVE & DRUMS\nTexture over groove: layers fade in and out over many bars, usually one at a time. Pads with slow attacks (1-8 s) avoid percussive entries.\n\nKEYS & SCALES\nLydian (major with a raised 4th) is the signature dreamy, floating mode. Major or minor pentatonic avoids clashes; Dorian and natural minor suit darker moods.\n\nCOMMON PROGRESSIONS\n•  I - IV (rocking)   (C - F)  two chords alternating slowly\n•  I - II (Lydian)   (C - D/C)  floating Lydian colour over a C drone\n•  Isus2 - IVadd9   (Csus2 - Fadd9)  open, unresolved voicings\n\nPRODUCTION TIPS\nHold a long drone on the root an octave or two below the chords; the gentle rub as chords move is a big part of the sound. Use open voicings spread over 2-3 octaves. Long reverbs (often 4-15 s) are central, but EQ the returns so they don't turn to mush.\n\nLOUDNESS\nTypical master: about -18 to -14 LUFS integrated, true peak -1 dBTP or lower.",
+   "tricks": [
+    {
+     "process": "eq",
+     "title": "Remove resonances, not life",
+     "text": "Long pads build up resonances over time: cut narrow peaks gently (2-4 dB). Avoid big boosts; the texture should stay soft."
+    },
+    {
+     "process": "eq",
+     "title": "High-pass reverbs and pads",
+     "text": "Even ambient needs a clean low end: high-pass pads at 80-150 Hz unless they carry the bass."
+    },
+    {
+     "process": "compression",
+     "title": "Barely any compression",
+     "text": "Use 1-2 dB of slow compression at most. Dynamics and slow swells are the emotion of ambient music."
+    },
+    {
+     "process": "sidechain",
+     "title": "Subtle movement, not pumping",
+     "text": "If you sidechain, use slow releases (300-600 ms) and 1-2 dB, so things breathe instead of pump."
+    },
+    {
+     "process": "reverb",
+     "title": "Reverb is an instrument",
+     "text": "Long reverbs (6-20 s), freeze and shimmer are core to the sound. Use a pre-delay so the source stays readable."
+    },
+    {
+     "process": "delay",
+     "title": "Long, modulated delays",
+     "text": "Delays of 1/2 note or longer with modulation and heavy filtering create evolving textures. Automate feedback over time."
+    },
+    {
+     "process": "gain",
+     "title": "Leave lots of headroom",
+     "text": "Ambient masters often sit around -16 to -12 LUFS. Don't limit hard; the quiet parts are part of the music."
+    }
+   ]
   }
- ]
+ ],
+ "mistakes": {
+  "eq": [
+   "Boosting instead of cutting: first cut what's too much, then boost only if something is missing.",
+   "Soloing too much: EQ decisions only matter in the mix, so check every move with all tracks playing.",
+   "Cutting the low end of everything at the same frequency: choose the high-pass per instrument, by ear."
+  ],
+  "compression": [
+   "Comparing at different volumes: louder always sounds better, so match the output level before deciding.",
+   "Too fast attack on drums: it kills the transient and the punch.",
+   "Compressing everything: if a part already sounds even, leave it alone."
+  ],
+  "sidechain": [
+   "Too long release: the sound never comes back up between kicks and feels choked.",
+   "Sidechaining everything equally: duck what actually clashes (bass, pads), not the whole mix.",
+   "Forgetting arrangement: often the best \"sidechain\" is not playing two sounds at once."
+  ],
+  "reverb": [
+   "Reverb on the low end: high-pass reverb returns at 200-500 Hz.",
+   "One reverb for everything at the same level: decide what's close (dry) and what's far (wet).",
+   "No pre-delay on vocals: 20-60 ms keeps the voice clear in front of its space."
+  ],
+  "delay": [
+   "Delays clashing with the groove: sync them to the tempo (1/4, 1/8, dotted 1/8).",
+   "Bright repeats that fight the dry sound: low-pass the delay around 3-6 kHz.",
+   "Delay on all the time: automate throws on single words or hits instead."
+  ],
+  "gain": [
+   "Mixing too hot: keep peaks around -6 dBFS per track and the mix bus under -3 dBFS before mastering.",
+   "Using the fader to fix plugin overload: fix the gain at the plugin that clips.",
+   "Judging changes by loudness: match levels when comparing before/after."
+  ]
+ }
 }

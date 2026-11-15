@@ -44,6 +44,7 @@ target_sources(MixMentor PRIVATE
     Targets.cpp
     Advisor.cpp
     SuggestionPanel.cpp
+    GuidePage.cpp
     MelodyEngine.cpp
     MelodyCore.cpp
     MelodyPanel.cpp)

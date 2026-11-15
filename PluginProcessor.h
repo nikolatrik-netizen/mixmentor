@@ -52,13 +52,21 @@ public:
     //==============================================================================
     // Shared with the editor
 
-    /** The editor turns this on while it's open: every block (stereo, after the trim) is streamed
-        to it together with its song position. */
-    std::atomic<bool> listening { false };
-    /** GUI thread: takes the next streamed block. Returns its length (0 if none). */
+    /** Always on: every block (stereo, after the trim) goes, with its song position, to the
+        analysis thread below. It keeps listening while the window is closed or you're working in
+        your EQ, so every change is measured. */
+    std::atomic<bool> listening { true };
+    /** Takes the next streamed block. Returns its length (0 if none). */
     int readStreamBlock (float* left, float* right, int maxSamples, BlockInfo& info);
+
+    /** The listening + advice state. Owned by the analysis thread; the editor reads it while
+        holding analysisLock (recursive, so nested calls are fine). */
+    juce::CriticalSection analysisLock;
+    LiveListener listener;
+    std::atomic<bool> pendingScan { true };      // look for problems when the next loop is complete
+    std::atomic<int> passEvents { 0 }, beatEvents { 0 };   // the editor refreshes when these change
     /** GUI thread: latest audio (mono) for the live spectrum display. */
-    int readDisplaySamples (float* dest, int maxSamples);
+    int readDisplaySamples (float* left, float* right, int maxSamples);
     /** Counts audio the GUI didn't pick up in time (the analysis then restarts its current frame). */
     int getDroppedCount() const { return droppedBlocks.load(); }
 
@@ -89,6 +97,20 @@ public:
     std::map<juce::String, juce::uint32> workflowProgress;
 
 private:
+    /** Drains the stream into the listener, ~200 times a second, off the audio and GUI threads. */
+    struct AnalysisThread : juce::Thread
+    {
+        explicit AnalysisThread (MixMentorProcessor& p) : juce::Thread ("MixMentor analysis"), owner (p) {}
+        void run() override;
+        MixMentorProcessor& owner;
+    };
+    void drainStream();
+    void onPassComplete();
+    AnalysisThread analysisThread { *this };
+    std::vector<float> workLeft = std::vector<float> ((size_t) (1 << 15)), workRight = std::vector<float> ((size_t) (1 << 15));
+    int lastDropped = 0;
+    double listenerRate = 0.0;
+
     static constexpr int fifoSize = 1 << 18;   // ~5 s of stereo audio, so a busy GUI doesn't lose any
     juce::AbstractFifo fifo { fifoSize };
     std::vector<float> fifoLeft = std::vector<float> ((size_t) fifoSize, 0.0f);
@@ -96,6 +118,7 @@ private:
     std::atomic<int> droppedBlocks { 0 };
     juce::AbstractFifo displayFifo { 1 << 16 };
     std::vector<float> displayBuffer = std::vector<float> ((size_t) (1 << 16), 0.0f);
+    std::vector<float> displayBufferR = std::vector<float> ((size_t) (1 << 16), 0.0f);
     struct StreamBlock { int numSamples = 0; BlockInfo info; };
     juce::AbstractFifo blockFifo { 4096 };
     std::array<StreamBlock, 4096> blockInfos {};

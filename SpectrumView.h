@@ -24,7 +24,7 @@ public:
     SpectrumView();
 
     /** Latest audio (mono) for the live display. */
-    void pushDisplay (const float* mono, int numSamples);
+    void pushDisplay (const float* left, const float* right, int numSamples);
     /** The captured bars (stereo), every sample in order. */
     void pushCapture (const float* left, const float* right, int numSamples);
     /** The bars are complete: compute the result now. Returns false if there was no sound in them. */
@@ -73,7 +73,7 @@ public:
     static juce::String formatHz (float hz);
 
 private:
-    static constexpr int fftOrder = 12;
+    static constexpr int fftOrder = 13;   // 8192 points: ~5.4 Hz bins at 44.1 kHz, enough for the sub
     static constexpr int fftSize = 1 << fftOrder;
     static constexpr float minHz = 20.0f, maxHz = 20000.0f;
     static constexpr float minDb = -90.0f, maxDb = 0.0f;
@@ -91,9 +91,12 @@ private:
     juce::dsp::WindowingFunction<float> window { (size_t) fftSize, juce::dsp::WindowingFunction<float>::hann };
 
     std::vector<float> history = std::vector<float> ((size_t) fftSize, 0.0f);
+    std::vector<float> historyR = std::vector<float> ((size_t) fftSize, 0.0f);
+    std::vector<float> fftDataR = std::vector<float> ((size_t) fftSize * 2, 0.0f);
     int historyWritePos = 0;
     std::vector<float> fftData = std::vector<float> ((size_t) fftSize * 2, 0.0f);
-    std::vector<float> smoothedDb = std::vector<float> ((size_t) fftSize / 2, minDb);
+    std::vector<float> smoothedDb = std::vector<float> ((size_t) fftSize / 2, -200.0f);   // raw dB per bin (no tilt)
+    float liveDbAt (float hz) const;
     double lastSampleRate = 44100.0;
     bool captureDone = false;
     juce::String captureStatus;

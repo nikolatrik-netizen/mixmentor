@@ -32,11 +32,12 @@ juce::String SpectrumView::formatHz (float hz)
     return juce::String (rounded) + " Hz";
 }
 
-void SpectrumView::pushDisplay (const float* mono, int numSamples)
+void SpectrumView::pushDisplay (const float* left, const float* right, int numSamples)
 {
     for (int i = 0; i < numSamples; ++i)
     {
-        history[(size_t) historyWritePos] = mono[i];
+        history[(size_t) historyWritePos] = left[i];
+        historyR[(size_t) historyWritePos] = right[i];
         historyWritePos = (historyWritePos + 1) % fftSize;
     }
 }
@@ -88,31 +89,42 @@ void SpectrumView::setZoneMarks (std::vector<ZoneMark> newMarks)
 
 float SpectrumView::tiltDb (float hz)
 {
-    // +3 dB/octave around 1 kHz so a balanced mix looks roughly flat (like Pro-Q's analyzer).
-    return 3.0f * std::log2 (juce::jmax (hz, 1.0f) / 1000.0f);
+    // +4.5 dB/octave around 1 kHz: the same tilt as Pro-Q's analyzer (its default), so both show
+    // the same shape. Display only; the analysis judges on its own scale.
+    return 4.5f * std::log2 (juce::jmax (hz, 1.0f) / 1000.0f);
 }
 
 void SpectrumView::updateSpectrum (double sampleRate, bool hasSignal)
 {
     lastSampleRate = sampleRate > 0 ? sampleRate : 44100.0;
 
-    // Unroll the circular history so the oldest sample comes first.
+    // Unroll the circular history so the oldest sample comes first (both channels).
     for (int i = 0; i < fftSize; ++i)
-        fftData[(size_t) i] = history[(size_t) ((historyWritePos + i) % fftSize)];
+    {
+        const auto idx = (size_t) ((historyWritePos + i) % fftSize);
+        fftData[(size_t) i] = history[idx];
+        fftDataR[(size_t) i] = historyR[idx];
+    }
     std::fill (fftData.begin() + fftSize, fftData.end(), 0.0f);
+    std::fill (fftDataR.begin() + fftSize, fftDataR.end(), 0.0f);
 
     window.multiplyWithWindowingTable (fftData.data(), (size_t) fftSize);
+    window.multiplyWithWindowingTable (fftDataR.data(), (size_t) fftSize);
     fft.performFrequencyOnlyForwardTransform (fftData.data());
+    fft.performFrequencyOnlyForwardTransform (fftDataR.data());
 
     // A full-scale sine reads ~0 dB: Hann window halves amplitude, FFT scales by N/2.
+    // Left and right are power-averaged (like the analysis and Pro-Q), so wide stereo parts
+    // don't disappear the way they do in a mono L+R sum.
     const float norm = 4.0f / (float) fftSize;
+    for (size_t b = 0; b < (size_t) fftSize / 2; ++b)
+        fftData[b] = std::sqrt (0.5f * (fftData[b] * fftData[b] + fftDataR[b] * fftDataR[b]));
 
     juce::ignoreUnused (hasSignal);
     for (size_t bin = 1; bin < smoothedDb.size(); ++bin)
     {
-        const float hz = (float) bin * (float) lastSampleRate / (float) fftSize;
         const float mag = fftData[bin] * norm;
-        const float db = juce::Decibels::gainToDecibels (mag, minDb) + tiltDb (hz);
+        const float db = juce::Decibels::gainToDecibels (mag, -200.0f);   // tilt is added when drawing
 
         auto& sm = smoothedDb[bin];
         sm = db > sm ? 0.5f * sm + 0.5f * db     // rise quickly
@@ -121,13 +133,38 @@ void SpectrumView::updateSpectrum (double sampleRate, bool hasSignal)
     repaint();
 }
 
+float SpectrumView::liveDbAt (float hz) const
+{
+    // Power average over 1/12 octave (like an analyzer's medium resolution): one level per band,
+    // not single FFT bins, so the top end is a steady line instead of spiky noise.
+    const float binHz = (float) lastSampleRate / (float) fftSize;
+    const float lo = hz * std::pow (2.0f, -1.0f / 24.0f) / binHz, hi = hz * std::pow (2.0f, 1.0f / 24.0f) / binHz;
+    const int last = (int) smoothedDb.size() - 2;
+    double acc = 0.0; int n = 0;
+    for (int b = juce::jmax (1, (int) std::ceil (lo)); b <= juce::jmin (last, (int) std::floor (hi)); ++b)
+    { acc += std::pow (10.0, smoothedDb[(size_t) b] / 10.0); ++n; }
+    if (n == 0)
+    {
+        const float pos = hz / binHz;
+        const int b0 = juce::jlimit (1, last, (int) pos);
+        const float frac = juce::jlimit (0.0f, 1.0f, pos - (float) b0);
+        acc = std::pow (10.0, smoothedDb[(size_t) b0] / 10.0) * (1.0 - frac) + std::pow (10.0, smoothedDb[(size_t) b0 + 1] / 10.0) * frac;
+        n = 1;
+    }
+    const float raw = (float) (10.0 * std::log10 (acc / n + 1.0e-30));
+    // Silence and the digital noise floor stay off the screen: the tilt must not lift them into
+    // view at the top end (that was the line that never went away above 10 kHz).
+    return raw < -120.0f ? -200.0f : raw + tiltDb (hz);
+}
+
 float SpectrumView::averagedDbAt (float hz) const
 {
     const auto& a = hasSnapshot() ? *snapshot : analyzer;
     // 1/6-octave smoothing, as the tonal balance is judged
     double acc = 0.0;
     for (int j = -2; j <= 2; ++j) acc += std::pow (10.0, a.levelAt (hz * std::pow (2.0f, (float) j / 24.0f)) / 10.0);
-    return (float) (10.0 * std::log10 (acc / 5.0 + 1.0e-20)) + tiltDb (hz);
+    const float raw = (float) (10.0 * std::log10 (acc / 5.0 + 1.0e-20));
+    return raw < -120.0f ? -200.0f : raw + tiltDb (hz);
 }
 
 void SpectrumView::computeReadings()
@@ -263,14 +300,9 @@ void SpectrumView::paint (juce::Graphics& g)
 
     // Live spectrum: darker blue area, like a filled analyzer
     juce::Path curve;
-    const float binHz = (float) lastSampleRate / (float) fftSize;
     for (int px = 0; px <= getWidth(); px += 2)
     {
-        const float binPos = freqForX ((float) px) / binHz;
-        const int b0 = juce::jlimit (1, (int) smoothedDb.size() - 2, (int) binPos);
-        const float frac = juce::jlimit (0.0f, 1.0f, binPos - (float) b0);
-        const float db = smoothedDb[(size_t) b0] + frac * (smoothedDb[(size_t) b0 + 1] - smoothedDb[(size_t) b0]);
-        const float y = yForDb (db);
+        const float y = yForDb (liveDbAt (freqForX ((float) px)));
         if (px == 0) curve.startNewSubPath ((float) px, y);
         else         curve.lineTo ((float) px, y);
     }

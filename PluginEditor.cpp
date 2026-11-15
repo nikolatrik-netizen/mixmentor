@@ -413,28 +413,10 @@ void WorkflowList::mouseExit (const juce::MouseEvent&)
 }
 
 //==============================================================================
-namespace
-{
-    /** Fills a read-only TextEditor, turning ALL-CAPS lines into small bold headings. */
-    void setGuideText (juce::TextEditor& editor, const juce::String& text)
-    {
-        editor.clear();
-        auto lines = juce::StringArray::fromLines (text);
-        for (int i = 0; i < lines.size(); ++i)
-        {
-            const auto& line = lines[i];
-            const bool heading = line.length() > 2 && line == line.toUpperCase() && line.containsAnyOf ("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-            editor.setFont (heading ? font (13.5f, true) : font (16.5f));
-            editor.setColour (juce::TextEditor::textColourId, heading ? col::textDim : col::text);
-            editor.insertTextAtCaret (line + (i < lines.size() - 1 ? "\n" : ""));
-        }
-        editor.moveCaretToTop (false);
-    }
-}
 
 //==============================================================================
 MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
-    : AudioProcessorEditor (&p), processor (p)
+    : AudioProcessorEditor (&p), processor (p), listener (p.listener)
 {
     setLookAndFeel (&lookAndFeel.get());
     tooltipWindow.setOpaque (false);
@@ -494,26 +476,31 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
     addAndMakeVisible (suggestions);
     suggestions.onCheck = [this] (const juce::String& id)
     {
+        const juce::ScopedLock sl (processor.analysisLock);
         for (auto& a : processor.advisor.items)
             if (a.id == id)
             {
                 if (a.checking) { a.checking = false; a.checkMessage = {}; }
-                else            processor.advisor.requestCheck (id);
+                else            processor.advisor.requestCheck (id, listener.getPassCount(), listener.isListeningNow());
             }
         refreshSuggestions();
     };
-    suggestions.onReopen = [this] (const juce::String& id) { processor.advisor.reopen (id); refreshSuggestions(); };
-    suggestions.onRescan = [this] { pendingScan = true; refreshSuggestions(); };
+    suggestions.onReopen = [this] (const juce::String& id)
+    {
+        const juce::ScopedLock sl (processor.analysisLock);
+        processor.advisor.reopen (id);
+        refreshSuggestions();
+    };
+    suggestions.onRescan = [this] { processor.pendingScan = true; refreshSuggestions(); };
     suggestions.onStartOver = [this]
     {
+        const juce::ScopedLock sl (processor.analysisLock);
         processor.advisor.clear();
         listener.reset();
         spectrum.setSnapshot (nullptr);
-        pendingScan = true;
+        processor.pendingScan = true;
         refreshSuggestions();
     };
-    listener.onBeat = [this] { processor.advisor.updateLive (listener); refreshSuggestions(); };
-    listener.onPassComplete = [this] { passComplete(); };
 
     loadRefButton.setTooltip ("Compare to a reference\nLoad a pro song or sample you like (or drag it onto the window). "
                               "Mix Mentor then compares your sound with it instead of the genre average.");
@@ -525,7 +512,16 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
     };
     addAndMakeVisible (loadRefButton);
     clearRefButton.setTooltip ("Use the genre average again (for the mix bus), or no target (for single instruments).");
-    clearRefButton.onClick = [this] { processor.advisor.setReference ({}); pendingScan = true; refreshSuggestions(); repaint(); };
+    clearRefButton.onClick = [this]
+    {
+        {
+            const juce::ScopedLock sl (processor.analysisLock);
+            processor.advisor.setReference ({});
+            processor.pendingScan = true;
+        }
+        refreshSuggestions();
+        repaint();
+    };
     addAndMakeVisible (clearRefButton);
 
     // The tips page: one tab per process (eq, compression, ...). Workflow and theory get their own pages.
@@ -542,6 +538,7 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
     processTabs.onChange = [this] (int index) { currentProcess = tipProcesses[(size_t) index]; lastTipProcess = currentProcess; refreshContent(); };
     addChildComponent (processTabs);
     addAndMakeVisible (bandNumbers);
+    addChildComponent (guidePage);
     suggestions.onSelect = [this] (const juce::String&) { refreshSuggestions(); };
 
     tipText.setMultiLine (true, true);
@@ -588,7 +585,6 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
     setResizeLimits (1280, 780, 2200, 1400);
     setSize (1440, 900);
 
-    processor.listening = true;
     refreshContent();
     startTimerHz (30);
 }
@@ -596,7 +592,6 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
 MixMentorEditor::~MixMentorEditor()
 {
     stopTimer();
-    processor.listening = false;
     processor.melody.setPreviewPlaying (false);
     setLookAndFeel (nullptr);
 }
@@ -661,7 +656,7 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.fillEllipse (s.getX() + 64.0f + wordW + 5.0f, 44.0f, 6.0f, 6.0f);
     g.setColour (col::textFaint);
     g.setFont (font (11.0f));
-    g.drawText ("learn while you mix   v2.1", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
+    g.drawText ("learn while you mix   v2.2", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
 
     g.setColour (col::border.withAlpha (0.6f));
     g.fillRect (s.getX(), 94.0f, s.getWidth(), 1.0f);
@@ -677,6 +672,7 @@ void MixMentorEditor::paint (juce::Graphics& g)
         g.fillRoundedRectangle (box, 3.0f);
         g.setColour (col::border.withAlpha (0.6f));
         g.drawRoundedRectangle (box.reduced (0.5f), 3.0f, 1.0f);
+        const juce::ScopedLock sl (processor.analysisLock);
         const auto& t = processor.advisor.activeTarget();
         g.setColour (t.valid ? (t.fromReference ? col::accent : col::text) : col::textDim);
         g.setFont (font (12.5f));
@@ -727,8 +723,8 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.drawText ((bpmText.isNotEmpty() ? bpmText.toLowerCase() + "   |   " : juce::String()) + summaryText.toLowerCase(),
                 tb.withTrimmedRight (460.0f), juce::Justification::centredLeft, true);
 
-    // Guide panel (tips / workflow / theory pages)
-    if (page != pageTips && page != pageWorkflow && page != pageTheory)
+    // Guide panel (the workflow page; tips and theory draw their own designed page)
+    if (page != pageWorkflow)
         return;
     drawPanel (g, guidePanel.toFloat());
     auto gp = guidePanel.toFloat().reduced (18.0f, 14.0f);
@@ -793,7 +789,7 @@ void MixMentorEditor::resized()
         auto mix = area;
         const int panelW = juce::jlimit (480, 620, (int) (mix.getWidth() * 0.42f));
         suggestions.setBounds (mix.removeFromRight (panelW).reduced (10, 10).withTrimmedLeft (0));
-        bandNumbers.setBounds (mix.removeFromBottom (104).reduced (4, 0).withTrimmedBottom (6));
+        bandNumbers.setBounds (mix.removeFromBottom (142).reduced (4, 0).withTrimmedBottom (6));
         spectrum.setBounds (mix);
     }
 
@@ -805,6 +801,7 @@ void MixMentorEditor::resized()
         area.removeFromTop (12);
     }
     guidePanel = area;
+    guidePage.setBounds (area);
 
     auto content = guidePanel.reduced (18, 14).withTrimmedTop (18 + 8 + 24 + 10);
     content = content.withWidth (juce::jmin (content.getWidth(), 1040));   // keep lines readable
@@ -840,9 +837,10 @@ void MixMentorEditor::refreshContent()
     }
 
     const bool wf = isWorkflowTab();
-    const bool guidePage = page == pageTips || page == pageWorkflow || page == pageTheory;
-    tipText.setVisible (guidePage && ! wf);
-    workflowView.setVisible (guidePage && wf);
+    const bool onGuide = page == pageTips || page == pageWorkflow || page == pageTheory;
+    tipText.setVisible (false);
+    workflowView.setVisible (onGuide && wf);
+    this->guidePage.setVisible (page == pageTips || page == pageTheory);
 
     if (validGenre)
         melodyPanel.setGenre (kb.genres()[(size_t) g].id);
@@ -853,6 +851,7 @@ void MixMentorEditor::refreshContent()
         spectrum.setZones ({});
         guideTitle = {};
         tipText.setText ("No guide for this combination yet.", false);
+        this->guidePage.showTips ("Tips", "this instrument", genreName, "No guide for this combination yet.", {}, {});
         repaint();
         return;
     }
@@ -871,21 +870,26 @@ void MixMentorEditor::refreshContent()
     else if (isTheoryTab())
     {
         guideTitle = "music theory" + dot + genre.name;
-        setGuideText (tipText, genre.theoryText);
+        this->guidePage.showTheory (genre.name, genre.bpm, genre.theoryText);
     }
     else
     {
         guideTitle = process.name + " for " + kb.instruments()[(size_t) i].name + dot + genre.name;
         auto it = guide->tips.find (process.id);
-        setGuideText (tipText, it != guide->tips.end() ? it->second : juce::String ("No tip yet."));
+        std::vector<mm::Trick> tricks;
+        for (auto& t : genre.tricks) if (t.process == process.id) tricks.push_back (t);
+        this->guidePage.showTips (process.name, kb.instruments()[(size_t) i].name, genre.name,
+                                  it != guide->tips.end() ? it->second : juce::String ("No tip yet."), tricks,
+                                  kb.mistakesFor (process.id));
     }
 
     {
+        const juce::ScopedLock sl (processor.analysisLock);
         auto& adv = processor.advisor;
         const auto genreId = genre.id, instId = kb.instruments()[(size_t) i].id;
         if (adv.genreId != genreId || adv.instrumentId != instId)
         {
-            pendingScan = true;
+            processor.pendingScan = true;
             listener.reset();
             spectrum.setSnapshot (nullptr);
         }
@@ -994,40 +998,17 @@ std::vector<SuggestionPanel::Info> MixMentorEditor::findClashes() const
     return rows;
 }
 
-void MixMentorEditor::passComplete()
+void MixMentorEditor::onNewPass()
 {
-    const auto* pass = listener.lastPass();
-    if (pass == nullptr) return;
-    auto& adv = processor.advisor;
-    const auto* guide = mm::KnowledgeBase::get().findGuide (processor.genreIndex.load(), processor.instrumentIndex.load());
-
-    if (pendingScan || adv.scans == 0)
-    {
-        adv.scan (*pass, guide);
-        pendingScan = false;
-    }
-    adv.updateAfterPass (*pass);
-
-    spectrum.setSnapshot (pass->spectrum);
-
-    // Share this pass with the other Mix Mentors in the song (for clashes between tracks).
-    {
-        const auto& kb = mm::KnowledgeBase::get();
-        const auto& inst = kb.instruments()[(size_t) processor.instrumentIndex.load()];
-        TrackSnapshot snap;
-        snap.instrumentId = inst.id;
-        snap.instrumentName = inst.name;
-        snap.trackName = processor.getTrackName().isNotEmpty() ? processor.getTrackName() : inst.name;
-        snap.bandDb = pass->spectrum != nullptr ? pass->spectrum->thirdOctaveBands() : std::vector<float>();
-        snap.timeMs = juce::Time::currentTimeMillis();
-        if (! snap.bandDb.empty())
-            TrackRegistry::get().publish (processor.registryId, snap);
-    }
+    // (analysisLock held) the analysis thread finished a loop: show it
+    if (const auto* pass = listener.lastPass())
+        spectrum.setSnapshot (pass->spectrum);
     refreshSuggestions();
 }
 
 void MixMentorEditor::refreshSuggestions()
 {
+    const juce::ScopedLock sl (processor.analysisLock);
     auto& adv = processor.advisor;
     std::vector<SpectrumView::Highlight> hl;
     for (auto& a : adv.items)
@@ -1039,7 +1020,11 @@ void MixMentorEditor::refreshSuggestions()
             if (a.id == suggestions.getSelected() && a.title == h.label) h.colour = col::accent;
     spectrum.setHighlights (hl);
     spectrum.setTarget (adv.activeTarget());
-    bandNumbers.setReadings (adv.regionReadings (listener), adv.activeTarget().valid, adv.activeTarget().name);
+    bandNumbers.setReadings (adv.regionReadings (listener, mm::KnowledgeBase::get().findGuide (processor.genreIndex.load(), processor.instrumentIndex.load())),
+                            adv.activeTarget().valid, adv.activeTarget().name,
+                            adv.activeTarget().valid ? (adv.activeTarget().fromReference ? juce::String ("ref")
+                                                     : adv.genreName.length() <= 7 ? adv.genreName.toLowerCase() : juce::String ("genre"))
+                                                     : juce::String ("typical"));
 
     juce::String empty;
     if (adv.scans == 0)
@@ -1064,8 +1049,11 @@ void MixMentorEditor::setReferenceFile (const juce::File& file)
                                                 "Couldn't read that file. Use a WAV, AIFF, FLAC, OGG or MP3 that's at least a few seconds long.");
         return;
     }
-    processor.advisor.setReference (curve);
-    pendingScan = true;
+    {
+        const juce::ScopedLock sl (processor.analysisLock);
+        processor.advisor.setReference (curve);
+        processor.pendingScan = true;
+    }
     refreshSuggestions();
     repaint();
 }
@@ -1095,8 +1083,8 @@ void MixMentorEditor::timerCallback()
     const float peakDb = juce::Decibels::gainToDecibels (processor.takePeak(), -100.0f);
 
     spectrum.updateSpectrum (processor.getCurrentSampleRate(), peakDb > -50.0f);
-    for (int n; (n = processor.readDisplaySamples (readLeft.data(), (int) readLeft.size())) > 0;)
-        spectrum.pushDisplay (readLeft.data(), n);
+    for (int n; (n = processor.readDisplaySamples (readLeft.data(), readRight.data(), (int) readLeft.size())) > 0;)
+        spectrum.pushDisplay (readLeft.data(), readRight.data(), n);
 
     peakDisplayDb = juce::jmax (peakDb, peakDisplayDb - 1.0f);
     if (peakDb >= holdDb)       { holdDb = peakDb; holdFrames = 60; }   // hold for ~2 s
@@ -1105,20 +1093,22 @@ void MixMentorEditor::timerCallback()
 
     updateGainStatus();
 
-    // Everything the track plays goes to the listener, block by block with its song position.
-    if (processor.getDroppedCount() != lastDropped)
+    // The listening runs in the plugin itself (it never stops when this window closes);
+    // here we only show what it found.
     {
-        lastDropped = processor.getDroppedCount();
-        listener.markGap();
+        const juce::ScopedLock sl (processor.analysisLock);
+        if (processor.passEvents.load() != seenPassEvents)
+        {
+            seenPassEvents = processor.passEvents.load();
+            seenBeatEvents = processor.beatEvents.load();
+            onNewPass();
+        }
+        else if (processor.beatEvents.load() != seenBeatEvents)
+        {
+            seenBeatEvents = processor.beatEvents.load();
+            refreshSuggestions();
+        }
     }
-    if (std::abs (processor.getCurrentSampleRate() - listenerRate) > 1.0 && processor.getCurrentSampleRate() > 0.0)
-    {
-        listenerRate = processor.getCurrentSampleRate();
-        listener.prepare (listenerRate);
-    }
-    BlockInfo info;
-    for (int n; (n = processor.readStreamBlock (readLeft.data(), readRight.data(), (int) readLeft.size(), info)) > 0;)
-        listener.push (readLeft.data(), readRight.data(), n, info);
 
     if (++refreshCounter % 6 == 0)
         refreshSuggestions();   // status line, progress (beats update the cards themselves)

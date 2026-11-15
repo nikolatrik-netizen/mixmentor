@@ -73,8 +73,10 @@ namespace
 }
 
 //==============================================================================
-void BandNumbers::setReadings (std::vector<Advisor::RegionReading> r, bool hasTarget, const juce::String& targetName)
+void BandNumbers::setReadings (std::vector<Advisor::RegionReading> r, bool hasTarget, const juce::String& targetName,
+                               const juce::String& standardLabel)
 {
+    stdLabel = standardLabel;
     readings = std::move (r);
     target = hasTarget;
     name = targetName;
@@ -87,8 +89,8 @@ void BandNumbers::paint (juce::Graphics& g)
     auto caption = area.removeFromTop (20.0f);
     g.setFont (font (12.5f));
     g.setColour (col::textDim);
-    g.drawText (target ? "your sound vs " + name + "   (dB, 0 = on target, green = inside the typical range)"
-                       : juce::String ("how much each range sticks out (+) or dips (-) against its neighbours, in dB. Coloured = something to fix. Load a reference to compare with a target."),
+    g.drawText (target ? "big = how far you are from " + name + " (dB, green = in range)   |   you / " + stdLabel + " = level vs the track's average"
+                       : juce::String ("big = how much each range sticks out (+) or dips (-), dB   |   you / typical = level vs the track's average"),
                 caption, juce::Justification::centredLeft, true);
     area.removeFromTop (4.0f);
 
@@ -107,7 +109,13 @@ void BandNumbers::paint (juce::Graphics& g)
             value = (v > 0 ? "+" : "") + juce::String (v, 1);
             auto hz = [] (float f) { return f >= 1000.0f ? juce::String (f / 1000.0f, f >= 10000.0f ? 0 : 1) + "k" : juce::String ((int) f); };
             rangeText = hz (r.lowHz) + "-" + hz (r.highHz);
-            if (target)
+            if (r.noContent)
+            {
+                value = "-";
+                rangeText = "no audio here";
+                c = col::textFaint;
+            }
+            else if (target)
             {
                 if (v > r.tolerance)       { c = col::bad;  fill = col::bad.withAlpha (0.14f); }
                 else if (v < -r.tolerance) { c = col::warn; fill = col::warn.withAlpha (0.14f); }
@@ -130,7 +138,25 @@ void BandNumbers::paint (juce::Graphics& g)
         g.drawText (i < (int) readings.size() ? readings[(size_t) i].name : juce::String(), in.removeFromTop (16.0f), juce::Justification::centred, false);
         g.setColour (c);
         g.setFont (font (20.0f, true));
-        g.drawText (value, in.removeFromTop (26.0f), juce::Justification::centred, false);
+        g.drawText (value, in.removeFromTop (25.0f), juce::Justification::centred, false);
+
+        // your level, then the standard (both vs the track's average)
+        auto row1 = in.removeFromTop (16.0f), row2 = in.removeFromTop (16.0f);
+        if (i < (int) readings.size() && ! readings[(size_t) i].noContent)
+        {
+            const auto& r = readings[(size_t) i];
+            auto num = [] (float v) { return (v >= 0.05f ? "+" : "") + juce::String (v, 1); };
+            auto line = [&] (juce::Rectangle<float> rr, const juce::String& label, float v, juce::Colour lc)
+            {
+                juce::AttributedString a;
+                a.setJustification (juce::Justification::centred);
+                a.append (label + " ", font (11.5f), col::textFaint);
+                a.append (num (v), font (12.5f, true), lc);
+                a.draw (g, rr);
+            };
+            line (row1, "you", r.mine, col::text);
+            if (r.hasStandard) line (row2, stdLabel, r.standard, col::accent);
+        }
         g.setColour (col::textFaint);
         g.setFont (font (11.5f));
         g.drawText (rangeText, in.removeFromTop (15.0f), juce::Justification::centred, false);

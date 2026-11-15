@@ -17,6 +17,65 @@ MixMentorProcessor::MixMentorProcessor()
     trimDb = parameters.getRawParameterValue ("trim");
 
     mm::KnowledgeBase::get();   // load the knowledge base up front, off the audio thread
+
+    listener.onBeat = [this] { advisor.updateLive (listener); beatEvents.fetch_add (1); };
+    listener.onPassComplete = [this] { onPassComplete(); };
+    analysisThread.startThread (juce::Thread::Priority::low);
+}
+
+void MixMentorProcessor::AnalysisThread::run()
+{
+    while (! threadShouldExit())
+    {
+        owner.drainStream();
+        wait (5);
+    }
+}
+
+void MixMentorProcessor::drainStream()
+{
+    const juce::ScopedLock sl (analysisLock);
+    if (getDroppedCount() != lastDropped)
+    {
+        lastDropped = getDroppedCount();
+        listener.markGap();
+    }
+    const double sr = getCurrentSampleRate();
+    if (std::abs (sr - listenerRate) > 1.0 && sr > 0.0)
+    {
+        listenerRate = sr;
+        listener.prepare (listenerRate);
+    }
+    BlockInfo info;
+    for (int n; (n = readStreamBlock (workLeft.data(), workRight.data(), (int) workLeft.size(), info)) > 0;)
+        listener.push (workLeft.data(), workRight.data(), n, info);
+}
+
+void MixMentorProcessor::onPassComplete()
+{
+    // (analysis thread, analysisLock held)
+    const auto* pass = listener.lastPass();
+    if (pass == nullptr) return;
+    const auto* guide = mm::KnowledgeBase::get().findGuide (genreIndex.load(), instrumentIndex.load());
+    if (pendingScan.load() || advisor.scans == 0)
+    {
+        advisor.scan (*pass, guide);
+        pendingScan = false;
+    }
+    advisor.updateAfterPass (*pass, listener.getPassCount());
+
+    // Share this pass with the other Mix Mentors in the song (for clashes between tracks).
+    const auto& kb = mm::KnowledgeBase::get();
+    const auto& inst = kb.instruments()[(size_t) juce::jlimit (0, (int) kb.instruments().size() - 1, instrumentIndex.load())];
+    TrackSnapshot snap;
+    snap.instrumentId = inst.id;
+    snap.instrumentName = inst.name;
+    snap.trackName = getTrackName().isNotEmpty() ? getTrackName() : inst.name;
+    snap.bandDb = pass->spectrum != nullptr ? pass->spectrum->thirdOctaveBands() : std::vector<float>();
+    snap.timeMs = juce::Time::currentTimeMillis();
+    if (! snap.bandDb.empty())
+        TrackRegistry::get().publish (registryId, snap);
+    passEvents.fetch_add (1);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout MixMentorProcessor::createParameterLayout()
@@ -96,8 +155,9 @@ void MixMentorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     {
         int s1, n1, s2, n2;
         displayFifo.prepareToWrite (numSamples, s1, n1, s2, n2);
-        for (int i = 0; i < n1; ++i) displayBuffer[(size_t) (s1 + i)] = 0.5f * (L[i] + R[i]);
-        for (int i = 0; i < n2; ++i) displayBuffer[(size_t) (s2 + i)] = 0.5f * (L[n1 + i] + R[n1 + i]);
+        std::copy_n (L, n1, displayBuffer.data() + s1);
+        std::copy_n (R, n1, displayBufferR.data() + s1);
+        if (n2 > 0) { std::copy_n (L + n1, n2, displayBuffer.data() + s2); std::copy_n (R + n1, n2, displayBufferR.data() + s2); }
         displayFifo.finishedWrite (n1 + n2);
     }
 
@@ -152,12 +212,13 @@ void MixMentorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     melody.process (buffer, melodyMidi, getPlayHead());
 }
 
-int MixMentorProcessor::readDisplaySamples (float* dest, int maxSamples)
+int MixMentorProcessor::readDisplaySamples (float* left, float* right, int maxSamples)
 {
     int s1, n1, s2, n2;
     displayFifo.prepareToRead (juce::jmin (maxSamples, displayFifo.getNumReady()), s1, n1, s2, n2);
-    std::copy_n (displayBuffer.data() + s1, n1, dest);
-    if (n2 > 0) std::copy_n (displayBuffer.data() + s2, n2, dest + n1);
+    std::copy_n (displayBuffer.data() + s1, n1, left);
+    std::copy_n (displayBufferR.data() + s1, n1, right);
+    if (n2 > 0) { std::copy_n (displayBuffer.data() + s2, n2, left + n1); std::copy_n (displayBufferR.data() + s2, n2, right + n1); }
     displayFifo.finishedRead (n1 + n2);
     return n1 + n2;
 }
@@ -218,7 +279,10 @@ void MixMentorProcessor::getStateInformation (juce::MemoryBlock& destData)
     if (auto paramsXml = parameters.copyState().createXml())
         xml.addChildElement (paramsXml.release());
 
-    xml.setAttribute ("advisor", advisor.toXmlString());
+    {
+        const juce::ScopedLock sl (analysisLock);
+        xml.setAttribute ("advisor", advisor.toXmlString());
+    }
 
     melody.writeState (*xml.createNewChildElement ("Melody"));
 
@@ -247,7 +311,10 @@ void MixMentorProcessor::setStateInformation (const void* data, int sizeInBytes)
         if (auto* m = xml->getChildByName ("Melody"))
             melody.readState (*m);
 
-        advisor.fromXmlString (xml->getStringAttribute ("advisor"));
+        {
+            const juce::ScopedLock sl (analysisLock);
+            advisor.fromXmlString (xml->getStringAttribute ("advisor"));
+        }
 
         workflowProgress.clear();
         for (auto* w : xml->getChildWithTagNameIterator ("Workflow"))
@@ -262,6 +329,7 @@ juce::AudioProcessorEditor* MixMentorProcessor::createEditor()
 
 MixMentorProcessor::~MixMentorProcessor()
 {
+    analysisThread.stopThread (2000);
     TrackRegistry::get().remove (registryId);
 }
 

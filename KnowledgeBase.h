@@ -30,12 +30,18 @@ namespace mm
         juce::String phase, title, text;
     };
 
+    struct Trick
+    {
+        juce::String process, title, text;           // process id: eq, compression, ...
+    };
+
     struct Genre
     {
         juce::String id, name, summary, bpm;
         juce::String theoryText;                     // keys, scales, progressions, groove, loudness
         juce::StringArray elements;                  // key elements from the genre guide
         std::vector<WorkflowStep> workflow;          // 30-step production workflow
+        std::vector<Trick> tricks;                   // genre-specific pro tricks
         std::map<juce::String, Guide> guides;        // instrument id -> guide
     };
 
@@ -59,6 +65,12 @@ namespace mm
         const std::vector<Genre>&      genres() const      { return genres_; }
         const std::vector<Instrument>& instruments() const { return instruments_; }
         const std::vector<Process>&    processes() const   { return processes_; }
+        /** Common mistakes per process id. */
+        juce::StringArray mistakesFor (const juce::String& processId) const
+        {
+            auto it = mistakes_.find (processId);
+            return it != mistakes_.end() ? it->second : juce::StringArray();
+        }
 
         const Guide* findGuide (int genreIndex, int instrumentIndex) const;
 
@@ -74,5 +86,6 @@ namespace mm
         std::vector<Genre> genres_;
         std::vector<Instrument> instruments_;
         std::vector<Process> processes_;
+        std::map<juce::String, juce::StringArray> mistakes_;
     };
 }

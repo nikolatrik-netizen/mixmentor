@@ -85,6 +85,27 @@ namespace
     }
 
     juce::String capitalise (const juce::String& s) { return s.substring (0, 1).toUpperCase() + s.substring (1); }
+
+    /** Where the audio's top end stops (a sample or synth low-passed at 16 kHz, an MP3 source...).
+        Above it there's nothing an EQ boost could bring up, so it is never judged. The measured
+        2-8 kHz trend is extended upwards; the edge is where the level falls 20 dB under that line. */
+    float contentEdgeHz (const std::vector<float>& g, const std::vector<float>& meas)
+    {
+        double sx = 0, sy = 0, sxx = 0, sxy = 0; int n = 0;
+        for (size_t k = 0; k < g.size(); ++k)
+            if (g[k] >= 2000.0f && g[k] <= 8000.0f)
+            {
+                const double x = std::log2 (g[k] / 1000.0f);
+                sx += x; sy += meas[k]; sxx += x * x; sxy += x * meas[k]; ++n;
+            }
+        if (n < 3) return 20000.0f;
+        const double slope = juce::jmin (0.0, (n * sxy - sx * sy) / juce::jmax (1.0e-9, n * sxx - sx * sx));
+        const double icpt = (sy - slope * sx) / n;
+        for (size_t k = 0; k < g.size(); ++k)
+            if (g[k] > 8000.0f && meas[k] < icpt + slope * std::log2 (g[k] / 1000.0f) - 20.0)
+                return k > 0 ? g[k - 1] : 20000.0f;
+        return 20000.0f;
+    }
 }
 
 //==============================================================================
@@ -172,11 +193,13 @@ void Advisor::addTargetIssues (const LiveListener::Pass& pass, std::vector<Advic
     std::vector<float> dev (g.size()), tol (g.size());
     for (size_t i = 0; i < g.size(); ++i) { dev[i] = meas[i] - target.levelAt (g[i]) - (float) off; tol[i] = target.toleranceAt (g[i]); }
 
-    // Excess beyond the tolerance (signed: + too loud, - too quiet), ignoring the extremes.
+    // Excess beyond the tolerance (signed: + too loud, - too quiet), ignoring the extremes
+    // and anything above where the audio's top end stops.
+    const float edge = juce::jmin (18000.0f, contentEdgeHz (g, meas));
     std::vector<float> ex (g.size(), 0.0f);
     for (size_t k = 0; k < g.size(); ++k)
     {
-        if (g[k] < 30.0f || g[k] > 18000.0f) continue;
+        if (g[k] < 30.0f || g[k] > edge) continue;
         if (dev[k] > tol[k])       ex[k] = dev[k] - tol[k];
         else if (dev[k] < -tol[k]) ex[k] = dev[k] + tol[k];
     }
@@ -221,6 +244,10 @@ void Advisor::addZoneIssues (const LiveListener::Pass& pass, const mm::Guide& gu
     if (pass.spectrum == nullptr) return;
     float ref = 0.0f;
     const auto readings = pass.spectrum->readZones (guide.zones, ref);
+    const auto g = TargetCurve::grid();
+    std::vector<float> meas (g.size());
+    for (size_t i = 0; i < g.size(); ++i) meas[i] = smoothedLevel (*pass.spectrum, g[i]);
+    const float edge = contentEdgeHz (g, meas);
     for (size_t z = 0; z < guide.zones.size() && z < readings.size(); ++z)
     {
         const auto& zone = guide.zones[z];
@@ -233,7 +260,8 @@ void Advisor::addZoneIssues (const LiveListener::Pass& pass, const mm::Guide& gu
             const float limit = zone.kind == "boost" ? 1000.0f : zone.kind == "watch" ? 3.5f : 2.5f;
             const bool tooMuch = r.bumpDb > limit || (r.relativeDb > zone.targetMaxDb + 6.0f && r.bumpDb > 1.0f);
             const bool weakBody = zone.kind == "boost" && r.bumpDb < -5.0f;
-            const bool tooLittle = ! tooMuch && (weakBody || r.relativeDb < zone.targetMinDb - 3.0f);
+            const bool audible = zone.lowHz * 1.26f < edge;   // no "add air" when the audio stops below it
+            const bool tooLittle = ! tooMuch && audible && (weakBody || r.relativeDb < zone.targetMinDb - 3.0f);
             if (tooMuch || tooLittle)
             {
                 Advice a;
@@ -328,9 +356,12 @@ void Advisor::addDynamicsIssues (const DynamicsReading& d, std::vector<Advice>& 
     if (d.crestDb > crestMax)
         add (d.crestDb - crestMax + 3.0f, "crestHi", 1, d.crestDb, crestMax,
              master ? "Too dynamic for " + genreName : juce::String ("Peaks stick out"),
-             master ? juce::String ("Glue compressor 2:1, then a limiter") : juce::String ("Compressor: ") + recipeFor (inst).ratio + ", attack " + recipeFor (inst).attack,
+             master ? "Limiter: catch about " + num (d.crestDb - crestMax + 1.0f, 0) + " dB of the peaks (ceiling -1 dB)"
+                    : "Fast compressor (attack 0.5-2 ms): catch about " + num (d.crestDb - crestMax + 1.0f, 0) + " dB of the peaks",
              (master ? "Peaks stand " + num (d.crestDb) + " dB above the average level; punchy masters usually sit around 8-12 dB. "
-                     : "The peaks are " + num (d.crestDb) + " dB above the body of the sound, so it jumps out and then disappears. ") + recipe);
+                       "A glue compressor with a slow attack evens the mix out but lets the peaks through, so it won't move this number: the limiter does. "
+                     : "The peaks are " + num (d.crestDb) + " dB above the body of the sound, so it jumps out and then disappears. "
+                       "This needs a FAST attack: with a slow attack (10-30 ms) the peak passes untouched and this number won't move."));
     else if (d.crestDb < crestMin)
         add (crestMin - d.crestDb + 4.0f, "crestLo", -1, d.crestDb, crestMin, "Squashed",
              drum ? juce::String ("Less compression, or attack 30 ms") : juce::String ("Less compression / limiting"),
@@ -385,7 +416,7 @@ void Advisor::addDynamicsIssues (const DynamicsReading& d, std::vector<Advice>& 
 }
 
 
-std::vector<Advisor::RegionReading> Advisor::regionReadings (const LiveListener& listener) const
+std::vector<Advisor::RegionReading> Advisor::regionReadings (const LiveListener& listener, const mm::Guide* guide) const
 {
     struct R { const char* name; float lo, hi; };
     const R regionsList[] = { { "sub", 20, 60 }, { "bass", 60, 120 }, { "low-mids", 120, 300 }, { "mids", 300, 800 },
@@ -401,6 +432,27 @@ std::vector<Advisor::RegionReading> Advisor::regionReadings (const LiveListener&
     const auto g = TargetCurve::grid();
     std::vector<float> meas (g.size());
     for (size_t i = 0; i < g.size(); ++i) meas[i] = smoothedLevel (*prev->spectrum, g[i]);
+    const float edge = contentEdgeHz (g, meas);
+
+    // "Your level" per range: average (on the analysis' tilted scale) compared with the track's
+    // average 100 Hz - 8 kHz. The standard is the same number for the genre curve / reference,
+    // or, for an instrument, the typical range of its zones in this genre.
+    auto tiltedMean = [&] (auto&& levelOf, float lo, float hi)
+    {
+        double acc = 0.0; int k = 0;
+        for (size_t i = 0; i < g.size(); ++i)
+            if (g[i] >= lo && g[i] < hi) { acc += levelOf (i) + Analyzer::tiltDb (g[i]); ++k; }
+        return k > 0 ? (float) (acc / k) : 0.0f;
+    };
+    auto measOf = [&] (size_t i) { return meas[i]; };
+    auto targetOf = [&] (size_t i) { return target.levelAt (g[i]); };
+    const float mineRef = tiltedMean (measOf, 100.0f, 8000.0f);
+    const float stdRef = target.valid ? tiltedMean (targetOf, 100.0f, 8000.0f) : 0.0f;
+    float zoneRef = 0.0f;
+    std::vector<ZoneReading> zr;
+    if (! target.valid && guide != nullptr)
+        zr = prev->spectrum->readZones (guide->zones, zoneRef);   // only for its reference level
+
     double off = 0.0; int n = 0;
     if (target.valid)
         for (size_t i = 0; i < g.size(); ++i)
@@ -410,11 +462,41 @@ std::vector<Advisor::RegionReading> Advisor::regionReadings (const LiveListener&
     for (auto& r : regionsList)
     {
         RegionReading rr { r.name, r.lo, r.hi, 0.0f, 3.0f, target.valid };
+        if (r.lo * 1.26f >= edge)
+        {
+            rr.noContent = true;          // the audio has (almost) nothing here: nothing to judge
+            out.push_back (rr);
+            continue;
+        }
+        const float regionHi = juce::jmin (r.hi, edge);
+        if (target.valid)
+        {
+            rr.mine = tiltedMean (measOf, r.lo, regionHi) - mineRef;
+            rr.standard = tiltedMean (targetOf, r.lo, regionHi) - stdRef;
+            rr.hasStandard = true;
+        }
+        else
+        {
+            // same scale as the instrument guides' zone ranges (vs the track's 30 Hz - 16 kHz average)
+            rr.mine = tiltedMean (measOf, r.lo, regionHi) - (guide != nullptr ? zoneRef : mineRef);
+            if (guide != nullptr)
+            {
+                double acc = 0.0, wsum = 0.0;
+                for (auto& z : guide->zones)
+                {
+                    if (z.targetMaxDb - z.targetMinDb >= 20.0f) continue;   // no real range given
+                    const float o = std::log2 (juce::jmin (z.highHz, regionHi) / juce::jmax (z.lowHz, r.lo));
+                    if (o <= 0.0f) continue;
+                    acc += o * 0.5 * (z.targetMinDb + z.targetMaxDb); wsum += o;
+                }
+                if (wsum > 0.0) { rr.standard = (float) (acc / wsum); rr.hasStandard = true; }
+            }
+        }
         if (target.valid)
         {
             double d = 0.0, t = 0.0; int k = 0;
             for (size_t i = 0; i < g.size(); ++i)
-                if (g[i] >= r.lo && g[i] < r.hi) { d += meas[i] - target.levelAt (g[i]) - off; t += target.toleranceAt (g[i]); ++k; }
+                if (g[i] >= r.lo && g[i] < regionHi) { d += meas[i] - target.levelAt (g[i]) - off; t += target.toleranceAt (g[i]); ++k; }
             rr.value = k > 0 ? (float) (d / k) : 0.0f;
             rr.tolerance = k > 0 ? (float) (t / k) : 3.0f;
         }
@@ -429,9 +511,10 @@ std::vector<Advisor::RegionReading> Advisor::regionReadings (const LiveListener&
                 for (float f = a; f <= b; f *= std::pow (2.0f, 1.0f / 12.0f)) { acc += lvl (f); ++k; }
                 return k > 0 ? (float) (acc / k) : 0.0f;
             };
-            const float lo = juce::jmax (20.0f, r.lo), hi = juce::jmin (19000.0f, r.hi);
+            const float lo = juce::jmax (20.0f, r.lo), hi = juce::jmin (19000.0f, regionHi);
             const float below = meanOver (juce::jmax (20.0f, lo / 1.4142f), lo);
-            const float above = meanOver (hi, juce::jmin (20000.0f, hi * 1.4142f));
+            const float above = hi * 1.2f >= edge ? meanOver (hi / 1.4142f, hi)        // no audio above: the top of the range itself
+                                                  : meanOver (hi, juce::jmin (edge, hi * 1.4142f));
             const float xb = std::log2 (lo / 1.19f), xa = std::log2 (hi * 1.19f);
             double acc = 0.0; int k = 0;
             for (float f = lo; f <= hi; f *= std::pow (2.0f, 1.0f / 12.0f))
@@ -442,7 +525,11 @@ std::vector<Advisor::RegionReading> Advisor::regionReadings (const LiveListener&
             rr.value = k > 0 ? (float) (acc / k) : 0.0f;
         }
         if (live)
-            rr.value += LiveListener::rangeVsRest (cur->beats, 0, beat, r.lo, r.hi) - LiveListener::rangeVsRest (prev->beats, 0, beat, r.lo, r.hi);
+        {
+            const float liveDelta = LiveListener::rangeVsRest (cur->beats, 0, beat, r.lo, r.hi) - LiveListener::rangeVsRest (prev->beats, 0, beat, r.lo, r.hi);
+            rr.value += liveDelta;
+            rr.mine += liveDelta;
+        }
         for (auto& a : items)
             if (a.status == Advice::open && a.kind != Advice::kMetric && a.focusHz >= r.lo && a.focusHz < r.hi)
             {
@@ -505,7 +592,29 @@ void Advisor::addDetails (Advice& a) const
     {
         const auto& m = a.metric;
         const auto r = recipeFor (instrumentId);
-        if (m == "crestHi" || m == "swing")
+        const float catchDb = juce::jmax (1.0f, std::round (a.detected - a.goal + 1.0f));
+        if (m == "crestHi" && instrumentId == "master")
+        {
+            a.steps.add ("Put a limiter last on the master, just before Mix Mentor (in Studio One: Limiter2). Ceiling -1.0 dB, true peak on.");
+            a.steps.add ("Optional first: a glue compressor (2:1, attack 30 ms, auto release, 1-2 dB) for cohesion. It won't change this number much.");
+            a.steps.add ("Raise the limiter's input/gain until its meter shows about " + juce::String ((int) catchDb) + " dB of reduction on the loudest hits.");
+            a.steps.add ("Going past 4-6 dB? Do part of it earlier: a clipper on the drum bus, or tame the loudest drum hits.");
+            a.steps.add ("Let the loop come around once: the meter on this card updates every loop.");
+            a.listenFor = "Listen for the mix getting denser and louder while the kick and snare still hit.";
+            a.caution = "If the drums lose their snap or you hear distortion, back off 1-2 dB: a slightly dynamic master beats a crushed one.";
+        }
+        else if (m == "crestHi")
+        {
+            a.steps.add ("Insert a compressor on this track, above Mix Mentor (in Studio One: Compressor or Fat Channel; a limiter or clipper also works).");
+            a.steps.add ("Attack as FAST as it goes (0.5-2 ms), ratio 4:1 to 8:1, release 50-100 ms.");
+            a.steps.add ("Lower the threshold until the gain-reduction meter shows about " + juce::String ((int) catchDb) + " dB on the peaks.");
+            a.steps.add ("Raise the make-up gain until it's as loud as before (bypass to compare fairly).");
+            a.steps.add ("Want to keep the punch too? Do this with a second, fast compressor after your usual slow-attack one.");
+            a.steps.add ("Let the loop come around once: the meter on this card updates every loop.");
+            a.listenFor = "Listen for the peaks no longer jumping out, while the sound still has its attack.";
+            a.caution = "A slow attack (10-30 ms) lets the peaks through: that keeps punch, but it won't fix this.";
+        }
+        else if (m == "swing")
         {
             a.steps.add ("Insert a compressor on this track (in Studio One: Compressor, or the Fat Channel), above Mix Mentor.");
             a.steps.add (juce::String ("Ratio ") + r.ratio + ", attack " + r.attack + ", release " + r.release + ".");
@@ -653,7 +762,7 @@ void Advisor::updateLive (const LiveListener& listener)
     }
 }
 
-void Advisor::updateAfterPass (const LiveListener::Pass& pass)
+void Advisor::updateAfterPass (const LiveListener::Pass& pass, int passNumber)
 {
     for (auto& a : items)
     {
@@ -662,7 +771,12 @@ void Advisor::updateAfterPass (const LiveListener::Pass& pass)
         a.liveThisPass = false;
         const float slack = a.unit.isEmpty() ? 0.03f : 0.5f;
         a.goalReachedLastPass = a.toGo() <= slack;
-        if (a.checking)
+        if (a.checking && passNumber < a.checkAtPass)
+        {
+            // this loop was already playing when you ticked it: half before, half after your change
+            a.checkMessage = "Checking on the next full loop...";
+        }
+        else if (a.checking)
         {
             a.checking = false;
             if (a.goalReachedLastPass)
@@ -676,10 +790,15 @@ void Advisor::updateAfterPass (const LiveListener::Pass& pass)
     }
 }
 
-void Advisor::requestCheck (const juce::String& id)
+void Advisor::requestCheck (const juce::String& id, int passesDone, bool listeningNow)
 {
     for (auto& a : items)
-        if (a.id == id && a.status == Advice::open) { a.checking = true; a.checkMessage = "Checking on the next loop..."; }
+        if (a.id == id && a.status == Advice::open)
+        {
+            a.checking = true;
+            a.checkAtPass = passesDone + (listeningNow ? 2 : 1);
+            a.checkMessage = listeningNow ? "Finishing this loop, then checking on the next full one..." : "Checking on the next loop...";
+        }
 }
 
 void Advisor::reopen (const juce::String& id)

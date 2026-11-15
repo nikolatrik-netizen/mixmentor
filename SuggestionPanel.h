@@ -7,13 +7,15 @@
 class BandNumbers : public juce::Component
 {
 public:
-    void setReadings (std::vector<Advisor::RegionReading> r, bool hasTarget, const juce::String& targetName);
+    /** standardLabel: what the standard is called in the boxes ("pop", "ref", "typical"). */
+    void setReadings (std::vector<Advisor::RegionReading> r, bool hasTarget, const juce::String& targetName,
+                      const juce::String& standardLabel = "typical");
     void paint (juce::Graphics&) override;
 
 private:
     std::vector<Advisor::RegionReading> readings;
     bool target = false;
-    juce::String name;
+    juce::String name, stdLabel;
 };
 
 /** "What to do": compact cards (title, the move with numbers, a meter with the green goal zone,

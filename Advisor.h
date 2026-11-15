@@ -34,6 +34,7 @@ struct Advice
     // Workflow
     int status = open;
     bool checking = false;            // "Done, check it" ticked: waiting for the next full pass
+    int checkAtPass = 0;              // judged on this pass (the first one that started after the tick)
     juce::String checkMessage;        // result of the last check
     bool goalReachedLastPass = false;
 
@@ -77,9 +78,11 @@ public:
     /** After every beat: update values from the current pass vs. the same beats of the previous one. */
     void updateLive (const LiveListener& listener);
     /** After every full pass: update values, finish checks. */
-    void updateAfterPass (const LiveListener::Pass& pass);
+    void updateAfterPass (const LiveListener::Pass& pass, int passNumber);
     /** The user ticked "Done, check it". */
-    void requestCheck (const juce::String& id);
+    /** passesDone = passes completed so far; listeningNow = a pass is in progress (it started
+        before your change, so it isn't used for the check). */
+    void requestCheck (const juce::String& id, int passesDone, bool listeningNow);
     void reopen (const juce::String& id);
     void clear() { items.clear(); goodNotes.clear(); scans = 0; }
 
@@ -87,8 +90,9 @@ public:
 
     /** The numbers under the curve: each frequency region against the target (or, without a target,
         against the rest of the track), from the last loop plus the live change in the current one. */
-    struct RegionReading { juce::String name; float lowHz, highHz, value, tolerance; bool vsTarget; int issue = 0; };
-    std::vector<RegionReading> regionReadings (const LiveListener& listener) const;
+    struct RegionReading { juce::String name; float lowHz, highHz, value, tolerance; bool vsTarget; int issue = 0; bool noContent = false;
+                           float mine = 0.0f, standard = 0.0f; bool hasStandard = false; };   // level vs the track's average: yours, and the genre's
+    std::vector<RegionReading> regionReadings (const LiveListener& listener, const mm::Guide* guide = nullptr) const;
 
     juce::String toXmlString() const;
     void fromXmlString (const juce::String&);
