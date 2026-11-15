@@ -536,3 +536,19 @@ juce::String SpectrumView::getTooltip()
         text << "\n\nFix list: " << marks[(size_t) idx].text;
     return text;
 }
+
+std::vector<float> SpectrumView::getBandLevels() const
+{
+    std::vector<float> out;
+    if (! hasSnapshot)
+        return out;
+    for (int k = 0; k < 31; ++k)
+    {
+        const float centre = 20.0f * std::pow (2.0f, (float) k / 3.0f);
+        double acc = 0.0;
+        for (int j = -2; j <= 2; ++j)
+            acc += std::pow (10.0, averagedDbAt (centre * std::pow (2.0f, (float) j / 18.0f)) / 10.0);
+        out.push_back ((float) (10.0 * std::log10 (juce::jmax (1.0e-20, acc / 5.0))));
+    }
+    return out;
+}

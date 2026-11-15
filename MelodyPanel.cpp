@@ -190,6 +190,23 @@ MelodyPanel::MelodyPanel (MelodyCore& p, bool isEmbedded)
     };
     addAndMakeVisible (genreBox);
 
+    // Key and scale: "auto" detects them from your melody; pick them to lock every idea to your song's key.
+    keyBox.addItem ("auto", 100);
+    for (int k = 0; k < 12; ++k) keyBox.addItem (melody::keyNames()[k], k + 1);
+    keyBox.setSelectedId (processor.keyRoot >= 0 ? processor.keyRoot + 1 : 100, juce::dontSendNotification);
+    keyBox.setTooltip ("Key\nThe root note of your song. auto = detected from the melody. Set it to your song's key "
+                       "and every idea stays in it (check the key of your chords if you're not sure).");
+    keyBox.onChange = [this] { keyChanged(); };
+    addAndMakeVisible (keyBox);
+    scaleBox.addItem ("auto", 100);
+    for (int t = 0; t < melody::numScaleTypes; ++t) scaleBox.addItem (melody::scaleTypeNames()[t], t + 1);
+    scaleBox.setSelectedId (processor.scaleType >= 0 ? processor.scaleType + 1 : 100, juce::dontSendNotification);
+    scaleBox.setTooltip ("Scale\nmajor = bright, minor = dark (most trap, dnb, dubstep), harmonic minor = dramatic, "
+                         "dorian = minor but warmer (house, lo-fi), phrygian = tense and exotic, mixolydian = major with a bluesy 7th, "
+                         "pentatonic = only the 5 safest notes, can't sound wrong.");
+    scaleBox.onChange = [this] { keyChanged(); };
+    addAndMakeVisible (scaleBox);
+
     for (int bars : { 1, 2, 4, 8 })
         barsBox.addItem (juce::String (bars) + (bars == 1 ? " bar" : " bars"), bars);
     barsBox.setSelectedId (2, juce::dontSendNotification);
@@ -284,8 +301,15 @@ double MelodyPanel::currentLength() const
 void MelodyPanel::loadPhrase (const melody::Phrase& phrase)
 {
     processor.original = phrase;
-    analysis = melody::analyse (phrase);
+    analysis = melody::analyse (phrase, processor.keyRoot, processor.scaleType);
     regenerate();
+}
+
+void MelodyPanel::keyChanged()
+{
+    processor.keyRoot = keyBox.getSelectedId() == 100 ? -1 : keyBox.getSelectedId() - 1;
+    processor.scaleType = scaleBox.getSelectedId() == 100 ? -1 : scaleBox.getSelectedId() - 1;
+    loadPhrase (processor.original);
 }
 
 void MelodyPanel::regenerate()
@@ -306,7 +330,7 @@ void MelodyPanel::regenerate()
     else
     {
         const auto dot = juce::String::fromUTF8 ("  \xc2\xb7  ");
-        statusText = analysis.keyName + dot + juce::String ((int) (analysis.lengthBeats / 4.0)) + " bars" + dot
+        statusText = analysis.keyName + (analysis.keyFromUser ? juce::String() : juce::String (" (detected)")) + dot + juce::String ((int) (analysis.lengthBeats / 4.0)) + " bars" + dot
                    + juce::String ((int) processor.original.size()) + " notes" + dot
                    + melody::noteName (analysis.lowest) + "-" + melody::noteName (analysis.highest);
     }
@@ -394,7 +418,7 @@ void MelodyPanel::paint (juce::Graphics& g)
         g.drawText ("melody ideas", h.withWidth (140.0f), juce::Justification::centredLeft, false);
         g.setColour (col::textDim);
         g.setFont (font (13.0f));
-        g.drawText (statusText, h.withTrimmedLeft (150.0f).withTrimmedRight (260.0f), juce::Justification::centredLeft, true);
+        g.drawText (statusText, h.withTrimmedLeft (150.0f).withTrimmedRight (580.0f), juce::Justification::centredLeft, true);
     }
     else
     {
@@ -409,8 +433,10 @@ void MelodyPanel::paint (juce::Graphics& g)
     g.drawText ("melody", h.withTrimmedLeft (wordW + 10.0f).withWidth (110.0f), juce::Justification::centredLeft, false);
     g.setColour (col::textDim);
     g.setFont (font (13.0f));
-    g.drawText (statusText, h.withTrimmedLeft (280.0f).withTrimmedRight (260.0f), juce::Justification::centredLeft, true);
+    g.drawText (statusText, h.withTrimmedLeft (280.0f).withTrimmedRight (580.0f), juce::Justification::centredLeft, true);
     }
+    drawLabel (g, "key", keyBox.getBounds().toFloat().translated (-40.0f, 0.0f).withWidth (34.0f), col::textDim,
+               juce::Justification::centredRight);
     drawLabel (g, "genre", genreBox.getBounds().toFloat().translated (-58.0f, 0.0f).withWidth (50.0f), col::textDim,
                juce::Justification::centredRight);
 
@@ -467,7 +493,14 @@ void MelodyPanel::resized()
 {
     auto area = getLocalBounds();
     header = area.removeFromTop (embedded ? 52 : 64);
-    genreBox.setBounds (header.withTrimmedRight (22).removeFromRight (200).withSizeKeepingCentre (200, 30));
+    {
+        auto h = header.withTrimmedRight (22);
+        genreBox.setBounds (h.removeFromRight (190).withSizeKeepingCentre (190, 30));
+        h.removeFromRight (70);
+        scaleBox.setBounds (h.removeFromRight (160).withSizeKeepingCentre (160, 30));
+        h.removeFromRight (6);
+        keyBox.setBounds (h.removeFromRight (78).withSizeKeepingCentre (78, 30));
+    }
 
     leftPanel = area.removeFromLeft (embedded ? 240 : 250);
     auto l = leftPanel.reduced (20, 18).withTrimmedTop (26);

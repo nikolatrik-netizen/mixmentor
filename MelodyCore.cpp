@@ -259,6 +259,8 @@ void MelodyCore::writeState (juce::XmlElement& xml) const
 {
     xml.setAttribute ("genre", genreId);
     xml.setAttribute ("variation", selectedVariation);
+    xml.setAttribute ("key", keyRoot);
+    xml.setAttribute ("scale", scaleType);
     xml.setAttribute ("seed", juce::String (seed));
     for (auto& n : original)
     {
@@ -274,6 +276,8 @@ void MelodyCore::readState (const juce::XmlElement& xml)
 {
     genreId = xml.getStringAttribute ("genre");
     selectedVariation = xml.getIntAttribute ("variation");
+    keyRoot = xml.getIntAttribute ("key", -1);
+    scaleType = xml.getIntAttribute ("scale", -1);
     seed = xml.getStringAttribute ("seed", "1").getLargeIntValue();
     original.clear();
     for (auto* e : xml.getChildWithTagNameIterator ("Note"))

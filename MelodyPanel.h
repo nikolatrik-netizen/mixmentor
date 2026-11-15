@@ -81,7 +81,8 @@ private:
     MelodyCore& processor;
     const bool embedded;
 
-    juce::ComboBox genreBox, barsBox;
+    juce::ComboBox genreBox, barsBox, keyBox, scaleBox;
+    void keyChanged();
     juce::TextButton captureButton { "capture" }, loadButton { "load .mid" }, newIdeasButton { "new ideas" },
                      playButton { "play" }, originalButton { "original" };
     PianoRoll roll;

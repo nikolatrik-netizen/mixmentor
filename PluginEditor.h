@@ -94,9 +94,14 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
 
 private:
     juce::TextButton analyseButton { "analyse" }, startOverButton { "start over" };
+    int expandedRow = -1;                 // the open item showing its full text (-1 = the first one)
+    float scroll = 0.0f, maxScroll = 0.0f;
+    std::vector<std::pair<juce::Rectangle<float>, int>> cardHits;
     int mode = 0;
     float progress = 0.0f;
     std::vector<Row> rows;
@@ -161,6 +166,11 @@ private:
     juce::Viewport workflowView;
     FixPanel fixPanel;
     int captureKind = 0;   // 1 = analyse, 2 = re-check
+    std::vector<MeterFrame> captureFrames;
+    DynamicsReading dynamics;
+    void computeDynamics();
+    void addDynamicsIssues (std::vector<std::pair<float, FixIssue>>& found, juce::StringArray& good);
+    float metricValue (const juce::String& metric) const;
     SegmentedControl modeTabs;          // mix | melody
     MelodyPanel melodyPanel { processor.melody, true };
     GenrePicker picker;

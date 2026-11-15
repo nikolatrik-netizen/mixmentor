@@ -10,6 +10,7 @@ MixMentorProcessor::MixMentorProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      registryId (TrackRegistry::get().newId()),
       parameters (*this, nullptr, "PARAMS", createParameterLayout())
 {
     trimParam = parameters.getParameter ("trim");
@@ -36,6 +37,18 @@ void MixMentorProcessor::prepareToPlay (double sampleRate, int)
     trimGain.reset (sampleRate, 0.05);   // 50 ms ramp so trim changes never click
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (trimDb->load()));
     melody.prepare (sampleRate);
+
+    // Meters: K-weighting (as in loudness meters, ITU BS.1770) and a 120 Hz low band for low-end width.
+    frameLength = juce::jmax (256, (int) (sampleRate * 0.05));
+    for (int ch = 0; ch < 2; ++ch)
+    {
+        kShelf[ch].setCoefficients (juce::IIRCoefficients::makeHighShelf (sampleRate, 1681.97, 0.7072, 1.5849));
+        kHighPass[ch].setCoefficients (juce::IIRCoefficients::makeHighPass (sampleRate, 38.13, 0.5003));
+        lowA[ch].setCoefficients (juce::IIRCoefficients::makeLowPass (sampleRate, 120.0, 0.7071));
+        lowB[ch].setCoefficients (juce::IIRCoefficients::makeLowPass (sampleRate, 120.0, 0.7071));
+        kShelf[ch].reset(); kHighPass[ch].reset(); lowA[ch].reset(); lowB[ch].reset();
+    }
+    currentFrame = {};
     melodyMidi.ensureSize (2048);
 }
 
@@ -105,6 +118,34 @@ void MixMentorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     float current = peakSinceLastRead.load();
     while (blockPeak > current && ! peakSinceLastRead.compare_exchange_weak (current, blockPeak)) {}
+
+    // Meter frames (dynamics, loudness, stereo)
+    {
+        const float* L = buffer.getReadPointer (0);
+        const float* R = buffer.getReadPointer (numIn > 1 ? 1 : 0);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float l = L[i], r = R[i];
+            const float kl = kHighPass[0].processSingleSampleRaw (kShelf[0].processSingleSampleRaw (l));
+            const float kr = kHighPass[1].processSingleSampleRaw (kShelf[1].processSingleSampleRaw (r));
+            const float ll = lowB[0].processSingleSampleRaw (lowA[0].processSingleSampleRaw (l));
+            const float lrr = lowB[1].processSingleSampleRaw (lowA[1].processSingleSampleRaw (r));
+            auto& f = currentFrame;
+            f.msK += kl * kl + kr * kr;
+            f.ms += 0.5f * (l * l + r * r);
+            f.peak = juce::jmax (f.peak, std::abs (l), std::abs (r));
+            if (std::abs (l) >= 0.999f || std::abs (r) >= 0.999f) ++f.clips;
+            f.ll += l * l; f.rr += r * r; f.lr += l * r;
+            f.lowLL += ll * ll; f.lowRR += lrr * lrr; f.lowLR += ll * lrr;
+            if (++f.n >= frameLength)
+            {
+                int s1, n1, s2, n2;
+                meterFifo.prepareToWrite (1, s1, n1, s2, n2);
+                if (n1 > 0) { meterBuffer[(size_t) s1] = f; meterFifo.finishedWrite (1); }
+                f = {};
+            }
+        }
+    }
 
     // Melody tab preview: added after the analysis, so it never affects the mix advice.
     melodyMidi.clear();
@@ -183,6 +224,9 @@ void MixMentorProcessor::getStateInformation (juce::MemoryBlock& destData)
             e->setAttribute ("amount", is.amount);
             e->setAttribute ("baseline", is.baseline);
             e->setAttribute ("baseLvl", is.baselineLevel);
+            e->setAttribute ("metric", is.metric);
+            e->setAttribute ("limit", is.limit);
+            e->setAttribute ("fixedVal", is.fixedValue);
             e->setAttribute ("change", is.latestChange);
             e->setAttribute ("status", is.status);
         }
@@ -237,6 +281,9 @@ void MixMentorProcessor::setStateInformation (const void* data, int sizeInBytes)
                 is.amount = (float) e->getDoubleAttribute ("amount", 3.0);
                 is.baseline = (float) e->getDoubleAttribute ("baseline");
                 is.baselineLevel = (float) e->getDoubleAttribute ("baseLvl");
+                is.metric = e->getStringAttribute ("metric");
+                is.limit = (float) e->getDoubleAttribute ("limit");
+                is.fixedValue = (float) e->getDoubleAttribute ("fixedVal");
                 is.latestChange = (float) e->getDoubleAttribute ("change");
                 is.status = e->getIntAttribute ("status");
                 fixSession.issues.push_back (is);
@@ -254,7 +301,22 @@ juce::AudioProcessorEditor* MixMentorProcessor::createEditor()
     return new MixMentorEditor (*this);
 }
 
+MixMentorProcessor::~MixMentorProcessor()
+{
+    TrackRegistry::get().remove (registryId);
+}
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new MixMentorProcessor();
+}
+
+int MixMentorProcessor::readMeterFrames (MeterFrame* dest, int maxFrames)
+{
+    int s1, n1, s2, n2;
+    meterFifo.prepareToRead (maxFrames, s1, n1, s2, n2);
+    for (int i = 0; i < n1; ++i) dest[i] = meterBuffer[(size_t) (s1 + i)];
+    for (int i = 0; i < n2; ++i) dest[n1 + i] = meterBuffer[(size_t) (s2 + i)];
+    meterFifo.finishedRead (n1 + n2);
+    return n1 + n2;
 }

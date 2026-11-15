@@ -308,6 +308,7 @@ FixPanel::FixPanel()
 void FixPanel::setContent (int newMode, float newProgress, std::vector<Row> newRows, const juce::String& good,
                            const juce::String& warning, bool canRecheck)
 {
+    if (newMode != mode || newRows.size() != rows.size()) { expandedRow = -1; scroll = 0.0f; }
     mode = newMode; progress = newProgress; rows = std::move (newRows);
     goodText = good; warningText = warning;
     analyseButton.setButtonText (canRecheck ? "re-check" : mode == 2 ? "analyse again" : "analyse");
@@ -372,7 +373,9 @@ void FixPanel::paint (juce::Graphics& g)
                  "1.  Put Mix Mentor LAST on the track, after your EQ and compressor.\n"
                  "2.  Loop the loudest 4-8 bars and press play.\n"
                  "3.  Press analyse. It listens for 4 seconds and lists the ranges to cut or boost.\n"
-                 "4.  Make your EQ moves, then press re-check. Each range is marked fixed once it really changed.",
+                 "4.  Make your changes, then press re-check. Each item is marked fixed once it really changed, and stays fixed.\n\n"
+                 "Besides EQ it checks dynamics (punch, uneven level), loudness, clipping, stereo width and phase.\n"
+                 "Put Mix Mentor on your other tracks too and analyse each one: they compare notes and warn about clashes (kick vs. bass, vocal vs. chords).",
                  13.0f, col::textDim, area);
         return;
     }
@@ -402,13 +405,26 @@ void FixPanel::paint (juce::Graphics& g)
         area.removeFromTop (8.0f);
     }
 
+    // The list scrolls (mouse wheel) and shows the full text of one item at a time: click an item to open it.
+    const auto visible = area;
+    g.saveState();
+    g.reduceClipRegion (visible.toNearestInt());
+    area = visible.withY (visible.getY() - scroll).withHeight (6000.0f);
+    const float startY = area.getY();
+    cardHits.clear();
+    int firstOpen = -1;
+    for (int k = 0; k < (int) rows.size(); ++k)
+        if (rows[(size_t) k].state != 3) { firstOpen = k; break; }
+    const int showFull = expandedRow >= 0 && expandedRow < (int) rows.size() && rows[(size_t) expandedRow].state != 3 ? expandedRow : firstOpen;
+
     // Open items first, then fixed ones (compact)
     for (int pass = 0; pass < 2; ++pass)
     {
-        for (auto& r : rows)
+        for (int idx = 0; idx < (int) rows.size(); ++idx)
         {
+            const auto& r = rows[(size_t) idx];
             const bool isFixed = r.state == 3;
-            if ((pass == 0) == isFixed || area.getHeight() < 30.0f)
+            if ((pass == 0) == isFixed)
                 continue;
 
             juce::Colour c = r.state == 1 || r.state == 7 ? col::bad : r.state == 2 ? col::warn
@@ -426,10 +442,12 @@ void FixPanel::paint (juce::Graphics& g)
                 continue;
             }
 
-            const float bodyH = wrapped (r.body, 12.5f, col::textDim, area.reduced (14.0f, 0.0f), false);
-            const float h = juce::jmin (area.getHeight(), 22.0f + 18.0f + bodyH + 16.0f);
+            const bool full = idx == showFull;
+            const float bodyH = full ? wrapped (r.body, 12.5f, col::textDim, area.reduced (14.0f, 0.0f), false) : 0.0f;
+            const float h = 22.0f + 18.0f + (full ? bodyH + 2.0f : 0.0f) + 16.0f;
             auto card = area.removeFromTop (h);
             area.removeFromTop (8.0f);
+            cardHits.push_back ({ card, idx });
 
             g.setColour (col::box.withAlpha (0.6f));
             g.fillRoundedRectangle (card, 5.0f);
@@ -453,10 +471,11 @@ void FixPanel::paint (juce::Graphics& g)
             }
             g.setColour (c == col::textDim ? col::textDim : c.brighter (0.2f));
             g.setFont (font (12.5f, true));
-            g.drawText (r.title, inner.removeFromTop (18.0f), juce::Justification::centredLeft, true);
-            wrapped (r.body, 12.5f, col::textDim, inner);
+            g.drawText (r.title + (full ? juce::String() : juce::String ("   (click for how)")), inner.removeFromTop (18.0f),
+                        juce::Justification::centredLeft, true);
+            if (full) wrapped (r.body, 12.5f, col::textDim, inner);
         }
-        if (pass == 0 && fixedCount > 0 && area.getHeight() > 30.0f)
+        if (pass == 0 && fixedCount > 0)
         {
             area.removeFromTop (4.0f);
             drawLabel (g, "fixed", area.removeFromTop (18.0f), col::textFaint);
@@ -464,11 +483,38 @@ void FixPanel::paint (juce::Graphics& g)
         }
     }
 
-    if (goodText.isNotEmpty() && area.getHeight() > 30.0f)
+    if (goodText.isNotEmpty())
     {
         area.removeFromTop (6.0f);
-        wrapped ("Looks good: " + goodText, 12.5f, col::textFaint, area);
+        area.removeFromTop (wrapped ("Looks good: " + goodText, 12.5f, col::textFaint, area));
     }
+
+    const float contentH = area.getY() - startY;
+    g.restoreState();
+    maxScroll = juce::jmax (0.0f, contentH - visible.getHeight());
+    if (maxScroll > 0.0f && scroll < maxScroll - 1.0f)
+    {
+        // "more below" fade + hint
+        auto fade = visible.withTrimmedTop (visible.getHeight() - 28.0f);
+        g.setGradientFill (juce::ColourGradient (col::panel.withAlpha (0.0f), fade.getX(), fade.getY(),
+                                                 col::panel, fade.getX(), fade.getBottom(), false));
+        g.fillRect (fade);
+        g.setColour (col::textFaint);
+        g.setFont (font (11.5f));
+        g.drawText ("scroll for more", fade, juce::Justification::centredBottom, false);
+    }
+}
+
+void FixPanel::mouseDown (const juce::MouseEvent& e)
+{
+    for (auto& [r, idx] : cardHits)
+        if (r.contains (e.position)) { expandedRow = idx; repaint(); return; }
+}
+
+void FixPanel::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& w)
+{
+    scroll = juce::jlimit (0.0f, maxScroll, scroll - w.deltaY * 120.0f);
+    repaint();
 }
 
 //==============================================================================
@@ -791,7 +837,7 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.fillEllipse (s.getX() + 64.0f + wordW + 5.0f, 44.0f, 6.0f, 6.0f);
     g.setColour (col::textFaint);
     g.setFont (font (11.0f));
-    g.drawText ("learn while you mix   v0.8", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
+    g.drawText ("learn while you mix   v0.9", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
 
     g.setColour (col::border.withAlpha (0.6f));
     g.fillRect (s.getX(), 94.0f, s.getWidth(), 1.0f);
@@ -1020,16 +1066,195 @@ bool MixMentorEditor::fixListMatchesSettings() const
 void MixMentorEditor::startCapture (int kind)
 {
     captureKind = kind;
+    captureFrames.clear();
     spectrum.startCapture (4.0f);
     refreshFixPanel();
 }
 
 void MixMentorEditor::captureFinished()
 {
+    computeDynamics();
+
+    // Share this analysis with the other Mix Mentors in the song.
+    {
+        const auto& kb = mm::KnowledgeBase::get();
+        const auto& inst = kb.instruments()[(size_t) processor.instrumentIndex.load()];
+        TrackSnapshot snap;
+        snap.instrumentId = inst.id;
+        snap.instrumentName = inst.name;
+        snap.trackName = processor.getTrackName().isNotEmpty() ? processor.getTrackName() : inst.name;
+        snap.bandDb = spectrum.getBandLevels();
+        snap.timeMs = juce::Time::currentTimeMillis();
+        if (! snap.bandDb.empty())
+            TrackRegistry::get().publish (processor.registryId, snap);
+    }
+
     if (captureKind == 2) recheckFixList();
     else                  buildFixList();
     captureKind = 0;
     refreshFixPanel();
+}
+
+//==============================================================================
+// Dynamics, loudness and stereo
+//==============================================================================
+namespace
+{
+    float toDb (double power) { return power > 1.0e-12 ? (float) (10.0 * std::log10 (power)) : -120.0f; }
+
+    /** Starting compressor settings per instrument (ratio, attack, release, gain reduction).
+        Typical values from mixing guides and compression cheat sheets. */
+    struct CompRecipe { const char* ratio; const char* attack; const char* release; const char* reduction; const char* note; };
+
+    CompRecipe recipeFor (const juce::String& inst)
+    {
+        if (inst == "kick")   return { "4:1", "20-30 ms", "50-80 ms (let it recover before the next kick)", "3-6 dB",
+                                       "The slow attack lets the beater click through, so the kick gets punchier, not flatter." };
+        if (inst == "snare")  return { "4:1", "5-15 ms", "80-120 ms", "3-6 dB",
+                                       "A slightly faster attack than on the kick controls the crack without killing it." };
+        if (inst == "hats")   return { "2:1", "1-5 ms", "30-60 ms", "1-3 dB",
+                                       "Hats rarely need much. A transient shaper (less attack) or a soft clipper is often cleaner." };
+        if (inst == "bass")   return { "3:1 to 4:1", "15-25 ms", "100-150 ms, or timed to the note length", "3-5 dB",
+                                       "Bass should be very even so every note sits at the same level under the kick." };
+        if (inst == "vocal")  return { "3:1", "10-30 ms", "50-150 ms (or auto)", "3-6 dB",
+                                       "For a very jumpy vocal use two compressors: a fast one catching peaks (2-3 dB), then a slower, smoother one (2-3 dB). Ride the volume of single loud words with automation." };
+        if (inst == "master") return { "2:1", "30 ms", "auto, or about 100-200 ms", "1-2 dB",
+                                       "Gentle glue on the mix bus, then a limiter does the loudness." };
+        return { "2:1", "15-25 ms", "100-150 ms", "2-4 dB", "Gentle compression keeps it steady without squashing it." };
+    }
+
+    juce::String recipeText (const CompRecipe& r)
+    {
+        return juce::String ("Compressor: ratio ") + r.ratio + ", attack " + r.attack + ", release " + r.release
+             + ", aim for " + r.reduction + " of gain reduction. " + r.note;
+    }
+
+    /** Loudness targets for the loudest part of a finished master. These are integrated-LUFS ranges from
+        mastering guides; the loudest section usually reads 2-4 LU above the song's integrated value. */
+    juce::Range<float> loudnessTarget (const juce::String& genre)
+    {
+        if (genre == "hiphop")                                   return { -10.0f, -7.0f };
+        if (genre == "house" || genre == "techno" || genre == "trance" || genre == "dnb"
+            || genre == "dubstep" || genre == "futurebass" || genre == "ukg") return { -9.0f, -6.0f };
+        if (genre == "pop")                                      return { -11.0f, -8.0f };
+        if (genre == "lofi")                                     return { -14.0f, -10.0f };
+        if (genre == "ambient")                                  return { -16.0f, -12.0f };
+        return { -11.0f, -8.0f };
+    }
+}
+
+void MixMentorEditor::computeDynamics()
+{
+    DynamicsReading d;
+    if (captureFrames.size() < 10) { dynamics = d; return; }
+
+    double msK = 0, ms = 0, ll = 0, rr = 0, lr = 0, lowLL = 0, lowRR = 0, lowLR = 0;
+    long long n = 0;
+    float peak = 0.0f;
+    std::vector<float> frameDb;
+    for (auto& f : captureFrames)
+    {
+        msK += f.msK; ms += f.ms; ll += f.ll; rr += f.rr; lr += f.lr;
+        lowLL += f.lowLL; lowRR += f.lowRR; lowLR += f.lowLR;
+        n += f.n; peak = juce::jmax (peak, f.peak); d.clippedSamples += f.clips;
+        frameDb.push_back (toDb (f.ms / juce::jmax (1, f.n)));
+    }
+    d.peakDb = juce::Decibels::gainToDecibels (peak, -100.0f);
+    d.rmsDb = toDb (ms / (double) n);
+    d.crestDb = d.peakDb - d.rmsDb;
+    d.loudnessLufs = -0.691f + toDb (msK / (double) n);
+
+    // Level swings: loud vs. quiet moments while playing (frames far below the loudest are tails/gaps).
+    std::sort (frameDb.begin(), frameDb.end());
+    const float top = frameDb.back();
+    std::vector<float> body;
+    for (float x : frameDb) if (x > top - 24.0f) body.push_back (x);
+    if (body.size() >= 8)
+        d.swingDb = body[(size_t) (body.size() * 0.9)] - body[(size_t) (body.size() * 0.2)];
+
+    const double denom = std::sqrt (ll * rr), lowDenom = std::sqrt (lowLL * lowRR);
+    d.stereo = std::abs (ll - rr) > 1.0e-6 * (ll + rr) || std::abs (lr - denom) > 1.0e-4 * denom;
+    d.correlation = denom > 1.0e-12 ? (float) (lr / denom) : 1.0f;
+    d.lowCorrelation = lowDenom > 1.0e-12 ? (float) (lowLR / lowDenom) : 1.0f;
+    d.sideDb = toDb ((ll + rr - 2 * lr) / 4.0) - toDb ((ll + rr + 2 * lr) / 4.0);
+    // Only judge low-end width if there is real low end (more than ~5 % of the energy).
+    d.lowSideDb = (lowLL + lowRR) > 0.05 * (ll + rr)
+                      ? toDb ((lowLL + lowRR - 2 * lowLR) / 4.0) - toDb ((lowLL + lowRR + 2 * lowLR) / 4.0)
+                      : -100.0f;
+    d.valid = true;
+    dynamics = d;
+}
+
+float MixMentorEditor::metricValue (const juce::String& m) const
+{
+    const auto& d = dynamics;
+    if (m == "clip" || m == "truepeak")   return d.peakDb;
+    if (m == "crestHi" || m == "crestLo") return d.crestDb;
+    if (m == "swing")                     return d.swingDb;
+    if (m == "lowwidth")                  return d.lowCorrelation;
+    if (m == "phase")                     return d.correlation;
+    if (m == "width")                     return d.sideDb;
+    if (m == "loudLo" || m == "loudHi")   return d.loudnessLufs;
+    return 0.0f;
+}
+
+void MixMentorEditor::addDynamicsIssues (std::vector<std::pair<float, FixIssue>>& found, juce::StringArray& good)
+{
+    const auto& d = dynamics;
+    if (! d.valid) return;
+    const auto& kb = mm::KnowledgeBase::get();
+    const auto inst = kb.instruments()[(size_t) processor.instrumentIndex.load()].id;
+    const auto genre = kb.genres()[(size_t) processor.genreIndex.load()].id;
+    const bool drum = inst == "kick" || inst == "snare" || inst == "hats";
+    const bool master = inst == "master";
+    const bool sustained = ! drum && ! master;
+    const bool centred = inst == "kick" || inst == "snare" || inst == "bass" || inst == "vocal";
+
+    auto add = [&found] (float severity, const juce::String& metric, const juce::String& label, int action, float value, float limit)
+    {
+        FixIssue is;
+        is.metric = metric; is.label = label; is.action = action;
+        is.baseline = value; is.limit = limit;
+        is.amount = std::abs (value - limit);
+        found.push_back ({ severity, is });
+    };
+
+    bool dynOk = true, stereoOk = true;
+
+    // Clipping / no headroom
+    if (master ? d.peakDb > -1.0f : (d.clippedSamples > 0 && d.peakDb > -0.1f))
+    { add (master ? 12.0f : 20.0f, master ? "truepeak" : "clip", master ? "peak ceiling" : "clipping", 1, d.peakDb, master ? -1.0f : -0.5f); dynOk = false; }
+
+    // Punch vs. density (crest factor)
+    const float crestMax = master ? (genre == "ambient" || genre == "lofi" ? 18.0f : genre == "pop" ? 14.0f : 13.0f)
+                         : inst == "kick" || inst == "snare" ? 20.0f : inst == "hats" ? 22.0f
+                         : inst == "bass" ? 15.0f : inst == "vocal" ? 18.0f : 17.0f;
+    const float crestMin = master ? 6.0f : inst == "kick" || inst == "snare" ? 7.0f : inst == "bass" ? 3.5f : 5.0f;
+    if (d.crestDb > crestMax)      { add (d.crestDb - crestMax + 3.0f, "crestHi", master ? "too dynamic for the genre" : "peaks stick out", 1, d.crestDb, crestMax); dynOk = false; }
+    else if (d.crestDb < crestMin) { add (crestMin - d.crestDb + 4.0f, "crestLo", "squashed", -1, d.crestDb, crestMin); dynOk = false; }
+
+    // Uneven level on sustained parts
+    const float swingMax = inst == "bass" ? 6.0f : inst == "vocal" ? 8.0f : 10.0f;
+    if (sustained && d.swingDb > swingMax) { add (d.swingDb - swingMax + 2.0f, "swing", "uneven level", 1, d.swingDb, swingMax); dynOk = false; }
+
+    // Loudness of the master
+    if (master)
+    {
+        const auto target = loudnessTarget (genre);
+        if (d.loudnessLufs < target.getStart() - 1.0f)    { add (target.getStart() - d.loudnessLufs, "loudLo", "quieter than the genre", -1, d.loudnessLufs, target.getStart()); dynOk = false; }
+        else if (d.loudnessLufs > target.getEnd() + 3.0f) { add (d.loudnessLufs - target.getEnd(), "loudHi", "pushed very loud", 1, d.loudnessLufs, target.getEnd() + 2.0f); dynOk = false; }
+    }
+
+    // Stereo: phase, low-end width, centred parts that are too wide
+    if (d.stereo)
+    {
+        if (d.correlation < 0.0f)                                { add (15.0f, "phase", "phase problem", -1, d.correlation, 0.3f); stereoOk = false; }
+        else if (d.lowSideDb > -18.0f && d.lowCorrelation < 0.9f) { add (10.0f, "lowwidth", "low end in stereo", -1, d.lowCorrelation, 0.95f); stereoOk = false; }
+        if (centred && d.sideDb > -8.0f && d.correlation >= 0.0f) { add (6.0f, "width", "too wide for a centre part", 1, d.sideDb, -14.0f); stereoOk = false; }
+    }
+
+    if (dynOk)    good.add ("dynamics");
+    if (stereoOk) good.add (d.stereo ? "stereo & phase" : "mono (fine)");
 }
 
 void MixMentorEditor::buildFixList()
@@ -1047,8 +1272,7 @@ void MixMentorEditor::buildFixList()
     fs.genreId = kb.genres()[(size_t) g].id;
     fs.instrumentId = kb.instruments()[(size_t) i].id;
 
-    struct Candidate { float severity; FixIssue issue; };
-    std::vector<Candidate> found;
+    std::vector<std::pair<float, FixIssue>> found;   // severity, issue
     constexpr float tolerance = 3.0f;   // only clear problems make the list
 
     for (size_t z = 0; z < zones.size(); ++z)
@@ -1103,9 +1327,52 @@ void MixMentorEditor::buildFixList()
             fs.goodZones.add (zone.label.toLowerCase());
     }
 
-    std::sort (found.begin(), found.end(), [] (auto& a, auto& b) { return a.severity > b.severity; });
-    for (size_t k = 0; k < found.size() && k < 4; ++k)
-        fs.issues.push_back (found[k].issue);
+    addDynamicsIssues (found, fs.goodZones);
+
+    // Things you already fixed stay fixed: a new analysis only brings one back if it clearly got
+    // worse again since it was marked fixed (small differences between two listens are just noise).
+    const auto prev = processor.fixSession;
+    const bool samePrev = prev.valid && prev.genreId == fs.genreId && prev.instrumentId == fs.instrumentId;
+    auto previouslyFixed = [&] (const juce::String& key) -> const FixIssue*
+    {
+        if (samePrev)
+            for (auto& p : prev.issues)
+                if (p.status == 1 && p.key() == key) return &p;
+        return nullptr;
+    };
+
+    std::vector<std::pair<float, FixIssue>> kept;
+    for (auto& c : found)
+    {
+        if (auto* p = previouslyFixed (c.second.key()))
+        {
+            const auto& is = c.second;
+            bool cameBack;
+            if (is.metric.isNotEmpty())
+            {
+                const bool corr = is.metric == "phase" || is.metric == "lowwidth";
+                const float margin = corr ? 0.15f : 1.5f;
+                cameBack = is.action > 0 ? is.baseline > p->fixedValue + margin : is.baseline < p->fixedValue - margin;
+            }
+            else if (is.resonance) cameBack = is.baseline > p->fixedValue + 3.0f;
+            else cameBack = is.action > 0 ? is.baselineLevel > p->fixedValue + 2.0f : is.baselineLevel < p->fixedValue - 2.0f;
+            if (! cameBack) continue;
+        }
+        kept.push_back (c);
+    }
+
+    std::sort (kept.begin(), kept.end(), [] (auto& x, auto& y) { return x.first > y.first; });
+    for (size_t k = 0; k < kept.size() && k < 5; ++k)
+        fs.issues.push_back (kept[k].second);
+
+    if (samePrev)
+        for (auto& p : prev.issues)
+            if (p.status == 1)
+            {
+                bool again = false;
+                for (auto& is : fs.issues) again = again || is.key() == p.key();
+                if (! again) fs.issues.push_back (p);   // still listed under "fixed"
+            }
 
     processor.fixSession = fs;
 }
@@ -1121,8 +1388,27 @@ void MixMentorEditor::recheckFixList()
     bool heard = false;
     for (auto& is : fs.issues)
     {
-        if (is.status == 1 || ! juce::isPositiveAndBelow (is.zone, (int) readings.size()))
+        if (is.status == 1)
             continue;   // fixed stays fixed
+
+        if (is.metric.isNotEmpty())
+        {
+            if (! dynamics.valid) continue;
+            const float now = metricValue (is.metric);
+            const bool corr = is.metric == "phase" || is.metric == "lowwidth";
+            const float step = corr ? 0.1f : 1.0f;
+            const float change = (is.baseline - now) * (float) is.action;
+            is.latestChange = change;
+            heard = heard || std::abs (change) >= step * 0.7f;
+            const bool ok = is.action > 0 ? now <= is.limit : now >= is.limit;
+            if (ok)                    { is.status = 1; is.fixedValue = now; }
+            else if (change >= step)   is.status = 2;
+            else if (change <= -step)  is.status = 4;
+            else                       is.status = 3;
+            continue;
+        }
+        if (! juce::isPositiveAndBelow (is.zone, (int) readings.size()))
+            continue;
 
         const auto& zone = zones[(size_t) is.zone];
         const auto& r = readings[(size_t) is.zone];
@@ -1137,6 +1423,7 @@ void MixMentorEditor::recheckFixList()
             is.latestChange = change;
             is.status = (! stillThere || change >= 3.0f) ? 1 : change >= 1.0f ? 2 : change <= -2.0f ? 4
                       : rangeChange >= 1.5f ? 5 : 3;
+            if (is.status == 1) is.fixedValue = r.resonanceDb;
             heard = heard || std::abs (change) >= 1.0f || std::abs (rangeChange) >= 1.0f;
             continue;
         }
@@ -1152,7 +1439,7 @@ void MixMentorEditor::recheckFixList()
         const float neededChange = juce::jmax (1.5f, juce::jmin (is.amount * 0.6f, is.bump ? std::abs (is.baseline) + 1.0f : 99.0f));
         is.latestChange = change;
         heard = heard || std::abs (change) >= 1.0f;
-        if (inRange || change >= neededChange)                       is.status = 1;   // fixed
+        if (inRange || change >= neededChange)                     { is.status = 1; is.fixedValue = r.isolatedDb; }   // fixed
         else if (change >= 0.8f)                                     is.status = 2;   // improved
         else if (change <= -1.5f)                                    is.status = 4;   // worse
         else                                                         is.status = 3;   // no change heard
@@ -1194,8 +1481,128 @@ void MixMentorEditor::refreshFixPanel()
 
     std::vector<FixPanel::Row> rows;
     int noChange = 0, open = 0;
+    const auto instId = kb.instruments()[(size_t) processor.instrumentIndex.load()].id;
+    const auto genreName = kb.genres()[(size_t) processor.genreIndex.load()].name;
     for (auto& is : fs.issues)
     {
+        if (is.metric.isNotEmpty())
+        {
+            const auto& d = dynamics;
+            const auto& m = is.metric;
+            const bool corr = m == "phase" || m == "lowwidth";
+            auto num = [] (float v, int dec = 1) { return dec == 0 ? juce::String (juce::roundToInt (v)) : juce::String (v, dec); };
+            auto sgn = [] (float v) { return (v >= 0.0f ? "+" : "") + juce::String (v, 2); };
+            const float shown = is.status == 0 ? is.baseline : (d.valid ? metricValue (m) : is.baseline);
+            const auto recipe = recipeText (recipeFor (instId));
+            const bool drumPart = instId == "kick" || instId == "snare" || instId == "hats";
+
+            FixPanel::Row row;
+            juce::String chip, title = is.label, body;
+            if (m == "clip")
+            {
+                row.range = juce::String ("peaks ") + (shown >= 0.0f ? "+" : "") + num (shown) + " dB";
+                chip = "turn down ~" + num (juce::jmax (3.0f, is.baseline + 4.0f), 0) + " dB";
+                body = "This track hits 0 dBFS and clips (harsh, crunchy distortion). Turn down the plugin before Mix Mentor, "
+                       "or the trim knob, until peaks sit around -6 to -3 dB. Want that crunch? Use a clipper plugin on purpose instead.";
+            }
+            else if (m == "truepeak")
+            {
+                row.range = "peaks " + num (shown) + " dB";
+                chip = "ceiling -1 dB";
+                body = "Set the limiter's output ceiling to -1.0 dB (true peak mode if it has one). Converting to MP3/AAC for "
+                       "streaming can push peaks above that into distortion.";
+            }
+            else if (m == "crestHi")
+            {
+                row.range = "crest " + num (shown) + " dB";
+                chip = instId == "master" ? "glue + limit" : "compress";
+                if (instId == "master")
+                    body = "Peaks stand " + num (shown) + " dB above the average level, which is a lot for " + genreName
+                         + " (punchy masters usually sit around 8-12 dB). " + recipe + " Then a limiter (ceiling -1 dB) until crest is under "
+                         + num (is.limit, 0) + " dB.";
+                else
+                    body = "The peaks are " + num (shown) + " dB above the body of the sound, so it jumps out and then disappears. " + recipe
+                         + (drumPart && instId != "hats" ? " Or shave 2-3 dB off the peaks with a clipper." : juce::String());
+            }
+            else if (m == "crestLo")
+            {
+                row.range = "crest " + num (shown) + " dB";
+                chip = "less squash";
+                if (instId == "master")
+                    body = "The master is over-limited: peaks are only " + num (shown) + " dB above the average, so it will sound flat and "
+                           "small once streaming turns it down. Back the limiter off until crest is above " + num (is.limit, 0)
+                         + " dB (8-12 dB sounds punchy).";
+                else if (drumPart)
+                    body = "The hit barely sticks out of its body (" + num (shown) + " dB). Use less compression or clipping, or slow the "
+                           "compressor's attack to 30 ms so the transient gets through. A transient shaper with more attack brings punch back.";
+                else
+                    body = "It's very flat (" + num (shown) + " dB between peaks and average). If it sounds lifeless, use less "
+                           "compression or a slower attack. For 808s and pads this can be fine.";
+            }
+            else if (m == "swing")
+            {
+                row.range = "swings " + num (shown) + " dB";
+                chip = "compress";
+                body = "Some notes or words are much louder than others (" + num (shown) + " dB between loud and quiet moments, aim "
+                       "for under " + num (is.limit, 0) + "). " + recipe + " Then automate any single note that still jumps out.";
+            }
+            else if (m == "loudLo" || m == "loudHi")
+            {
+                row.range = num (shown) + " LUFS";
+                const auto t = loudnessTarget (fs.genreId);
+                if (m == "loudLo")
+                {
+                    chip = "louder";
+                    body = "Finished " + genreName + " masters usually sit around " + num (t.getStart(), 0) + " to " + num (t.getEnd(), 0)
+                         + " LUFS overall, and the loudest part reads 2-4 LU above that. This loop reads " + num (shown)
+                         + ". Raise the limiter's input gain (ceiling -1 dB) and keep an eye on punch.";
+                }
+                else
+                {
+                    chip = "ease off";
+                    body = "This is very loud (" + num (shown) + " LUFS). Streaming services turn it down anyway, so all that limiting only "
+                           "costs punch. Back the limiter off until the drums hit again.";
+                }
+            }
+            else if (m == "phase")
+            {
+                row.range = "correlation " + sgn (shown);
+                chip = "fix phase";
+                body = "Left and right partly cancel each other, so in mono (clubs, phones, Bluetooth speakers) this part gets thin or "
+                       "disappears. Turn down stereo wideners, Haas/delay widening or the synth's stereo/unison spread, and check one side "
+                       "isn't polarity-flipped. Aim for a correlation above +0.3.";
+            }
+            else if (m == "lowwidth")
+            {
+                row.range = "below 120 Hz";
+                chip = "mono the lows";
+                body = "The low end is in stereo (correlation " + sgn (shown) + " below 120 Hz). Low end should be mono: stereo lows lose "
+                       "punch in mono and on club systems. Make everything below ~120 Hz mono with a stereo imager or a mid/side EQ "
+                       "(high-pass the side at 120 Hz). In Studio One: Splitter in frequency mode, Binaural Pan width 0 on the low band.";
+            }
+            else if (m == "width")
+            {
+                row.range = shown < -60.0f ? juce::String ("width: mono") : "side " + num (shown) + " dB";
+                chip = "narrower";
+                body = "The " + kb.instruments()[(size_t) processor.instrumentIndex.load()].name.toLowerCase()
+                     + " is normally the centre of the mix, but it's quite wide here. Pan it centre and reduce stereo effects "
+                       "(chorus, wideners, unison). Save the width for chords, pads and effects.";
+            }
+
+            const auto moved = corr ? juce::String (std::abs (is.latestChange), 2) : juce::String (std::abs (is.latestChange), 1);
+            const auto unit = corr ? juce::String() : juce::String (" dB");
+            switch (is.status)
+            {
+                case 1: row.state = 3; row.title = title + (fs.checks > 0 ? "  (now " + (corr ? sgn (shown) : shown < -60.0f ? juce::String ("mono") : num (shown) + unit) + ")" : juce::String()); break;
+                case 2: row.state = 5; ++open; row.chip = chip; row.title = title + ": better, moved " + moved + unit; row.body = "Going the right way. " + body; break;
+                case 3: row.state = 6; ++open; ++noChange; row.chip = chip; row.title = title + ": no change heard"; row.body = body; break;
+                case 4: row.state = 7; ++open; row.chip = chip; row.title = title + ": got worse (" + moved + unit + ")"; row.body = body; break;
+                default: row.state = is.action > 0 ? 1 : 2; ++open; row.chip = chip; row.title = title; row.body = body + " Then press re-check."; break;
+            }
+            rows.push_back (row);
+            continue;
+        }
+
         FixPanel::Row row;
         row.range = fmtRange (is);
         const auto verb = is.action > 0 ? juce::String ("cut") : juce::String ("boost");
@@ -1216,8 +1623,15 @@ void MixMentorEditor::refreshFixPanel()
         else if (is.action < 0 && zone != nullptr && zone->tooLittle.containsIgnoreCase ("saturation"))
             how = "Add saturation, or boost about " + amt + " dB between " + fmtRange (is) + ".";
         else
-            how = juce::String (is.action > 0 ? "Cut" : "Boost") + " about " + amt + " dB between " + fmtRange (is)
-                + " (centre ~" + SpectrumView::formatHz (is.focusHz) + ") with a wide bell.";
+        {
+            // A bell centred where it measured worst, wide enough to cover the range.
+            const float centre = is.focusHz > 0.0f ? is.focusHz : std::sqrt (is.lowHz * is.highHz);
+            const float q = juce::jlimit (0.7f, 3.0f, centre / juce::jmax (1.0f, is.highHz - is.lowHz) * 1.4f);
+            how = "EQ: bell at " + SpectrumView::formatHz (centre) + ", Q " + juce::String (q, 1) + ", "
+                + (is.action > 0 ? "-" : "+") + amt + " dB (covers " + fmtRange (is) + "). "
+                + (is.action > 0 ? "Sweep the band slowly while listening: the ugliest spot is the one to cut."
+                                 : "Boost gently; if it gets harsh or boomy, use a shelf or saturation instead.");
+        }
 
         switch (is.status)
         {
@@ -1278,6 +1692,71 @@ void MixMentorEditor::refreshFixPanel()
         if (zoneMarks[z].state == 0 && fs.goodZones.contains (zones[z].label.toLowerCase()))
             zoneMarks[z] = { 4, "ok" };
 
+    // Clashes with other tracks (needs Mix Mentor on those tracks too, analysed at least once)
+    {
+        const auto mine = spectrum.getBandLevels();
+        const auto me = instId;
+        struct Rule { juce::StringArray others; float lo, hi; int kind; };
+        std::vector<Rule> rules;
+        const juce::StringArray harmonic { "chords", "keys", "guitar", "lead", "chops" };
+        if (me == "kick")                rules.push_back ({ { "bass" }, 40.0f, 120.0f, 0 });
+        if (me == "bass")              { rules.push_back ({ { "kick" }, 40.0f, 120.0f, 1 });
+                                         rules.push_back ({ harmonic, 125.0f, 400.0f, 2 }); }
+        if (harmonic.contains (me))    { rules.push_back ({ { "bass" }, 125.0f, 400.0f, 3 });
+                                         rules.push_back ({ { "vocal" }, 1000.0f, 4000.0f, 5 }); }
+        if (me == "vocal")               rules.push_back ({ harmonic, 1000.0f, 4000.0f, 4 });
+
+        if (! mine.empty() && ! rules.empty())
+        {
+            const float myTop = *std::max_element (mine.begin(), mine.end());
+            for (auto& other : TrackRegistry::get().others (processor.registryId))
+            {
+                if (other.bandDb.size() != mine.size()) continue;
+                const float theirTop = *std::max_element (other.bandDb.begin(), other.bandDb.end());
+                for (auto& rule : rules)
+                {
+                    if (! rule.others.contains (other.instrumentId)) continue;
+                    int best = -1; float bestLevel = -1000.0f;
+                    for (int k = 0; k < (int) mine.size(); ++k)
+                    {
+                        const float hz = TrackRegistry::bandHz (k);
+                        if (hz < rule.lo || hz > rule.hi) continue;
+                        const float a = mine[(size_t) k], b = other.bandDb[(size_t) k];
+                        // Both strong here (within 12 dB of their own loudest band) and about as loud as each other.
+                        if (a > myTop - 12.0f && b > theirTop - 12.0f && std::abs (a - b) < 6.0f && juce::jmin (a, b) > bestLevel)
+                        { bestLevel = juce::jmin (a, b); best = k; }
+                    }
+                    if (best < 0) continue;
+
+                    const auto f = SpectrumView::formatHz (TrackRegistry::bandHz (best));
+                    const auto them = other.trackName;
+                    FixPanel::Row row;
+                    row.state = 5;
+                    row.range = f;
+                    row.chip = "other track";
+                    row.title = "clashes with " + them;
+                    switch (rule.kind)
+                    {
+                        case 0: row.body = them + " is about as strong as your kick around " + f + ", so they blur into one boom. Sidechain the bass "
+                                           "to the kick (compressor on the bass, kick as its sidechain input: fast attack, 50-120 ms release, 2-6 dB of ducking), "
+                                           "or cut 2-3 dB at " + f + " on the bass (Q 2) and let the kick own that spot."; break;
+                        case 1: row.body = "This bass and " + them + " (kick) are equally strong around " + f + ". Sidechain this bass to the kick (fast attack, "
+                                           "50-120 ms release, 2-6 dB of ducking), or decide who owns the sub and cut 2-3 dB at " + f + " on the other one."; break;
+                        case 2: row.body = them + " has a lot of low-mid energy on top of this bass's body around " + f + ". High-pass " + them
+                                         + " at about 150-200 Hz, or cut 2-3 dB at " + f + " on it, so the bass stays clear."; break;
+                        case 3: row.body = "This part's low-mids sit on top of the bass (" + them + ") around " + f + ". High-pass this track at about 150 Hz "
+                                           "(raise it until it starts to sound thin, then back off), or cut 2-3 dB at " + f + "."; break;
+                        case 4: row.body = them + " is competing with the vocal's presence around " + f + ". Cut 2-3 dB at " + f + " (Q 1.5) on " + them
+                                         + ", or use a dynamic EQ band there with the vocal as sidechain, so it only dips while the vocal sings."; break;
+                        default: row.body = "This part sits right in the vocal's presence range (" + them + ") around " + f + ". Cut 2-3 dB at " + f
+                                          + " (Q 1.5) here, or use a dynamic EQ band with the vocal as sidechain so it only dips while the vocal sings."; break;
+                    }
+                    rows.push_back (row);
+                }
+            }
+        }
+    }
+
     juce::String warning;
     if (fs.checks > 0 && open > 0 && noChange == open && ! fs.heardChange)
         warning = "I didn't hear any of your changes. Mix Mentor must be the LAST plugin on this track, "
@@ -1286,6 +1765,13 @@ void MixMentorEditor::refreshFixPanel()
     juce::String good = fs.goodZones.joinIntoString (", ") + ".";
     if (fs.issues.empty())
         good = "every range is inside the typical range for this genre and instrument (" + fs.goodZones.joinIntoString (", ") + ").";
+    if (dynamics.valid)
+    {
+        const auto& d = dynamics;
+        good << "\nMeasured: peak " << juce::String (d.peakDb, 1) << " dB, crest " << juce::String (d.crestDb, 1)
+             << " dB, loudness " << juce::String (d.loudnessLufs, 1) << " LUFS"
+             << (d.stereo ? ", correlation " + juce::String (d.correlation, 2) : juce::String (", mono")) << ".";
+    }
 
     fixPanel.setContent (2, 0.0f, rows, good, warning, open > 0);
     spectrum.setZoneMarks (zoneMarks);
@@ -1312,6 +1798,15 @@ void MixMentorEditor::timerCallback()
 
     updateGainStatus();
 
+    {
+        MeterFrame frames[64];
+        int got;
+        while ((got = processor.readMeterFrames (frames, 64)) > 0)
+            if (spectrum.isCapturing() && captureKind != 0)
+                for (int k = 0; k < got; ++k)
+                    if (frames[k].n > 0 && frames[k].ms / (float) frames[k].n > 1.0e-7f)   // only while there's sound
+                        captureFrames.push_back (frames[k]);
+    }
     if (spectrum.takeCaptureResult())
         captureFinished();
     else if (spectrum.isCapturing() && ++frameCounter % 5 == 0)

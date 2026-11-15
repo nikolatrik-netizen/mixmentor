@@ -38,6 +38,8 @@ public:
     juce::String genreId;
     melody::Phrase original;
     int selectedVariation = 0;
+    int keyRoot = -1;     // 0-11, -1 = detect from the melody
+    int scaleType = -1;   // melody::ScaleType, -1 = detect
     juce::int64 seed = 1;
 
 private:

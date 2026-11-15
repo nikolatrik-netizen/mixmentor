@@ -84,3 +84,24 @@ Rebuild after editing (the file is compiled into the plugin).
   with the genre's reference).
 - Reference curves: overlay a typical genre spectrum for that instrument.
 - Step-by-step guided workflow ("1. Gain stage → 2. Subtractive EQ → 3. Compression...").
+
+
+## v0.9
+
+**Mix analysis**
+- The fix list now checks more than EQ:
+  - clipping and peak ceiling
+  - punch vs. squash (crest factor)
+  - uneven level (compressor settings per instrument)
+  - loudness against genre targets (master)
+  - stereo low end, phase and centre width
+- Each item gives concrete settings: EQ bell frequency/Q/gain and compressor ratio/attack/release/gain reduction.
+- Fixed items stay fixed when you analyse again. They only come back if they clearly got worse.
+- Tracks compare notes: put Mix Mentor on several tracks and analyse each. It warns about kick/bass, bass/chords and vocal/instrument clashes.
+- The list scrolls; click an item to see how to fix it.
+
+**Melody**
+- Key + scale picker (auto, or lock to your song's key; 8 scales). Every note of every idea is in key.
+- Ideas are written by a note model trained on the melodies of the POP909 dataset (909 songs, MIT licence) and scored with classic melody rules: resolve leaps, stable notes on strong beats, one clear high point, end on a stable note.
+- New idea: "fresh rhythm", built from the most common one-bar rhythms in real songs, repeating A A B A.
+- Training scripts: train/train.py, train/gen_header.py.

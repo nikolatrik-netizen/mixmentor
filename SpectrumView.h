@@ -45,6 +45,8 @@ public:
     /** Returns true once, when a capture has just finished. */
     bool takeCaptureResult() { const bool r = captureDone; captureDone = false; return r; }
     bool hasReadings() const { return hasSnapshot; }
+    /** 31 third-octave band levels (dB) of the frozen analysis, from 20 Hz. Empty before an analysis. */
+    std::vector<float> getBandLevels() const;
 
     const std::vector<mm::Zone>& getZones() const { return zones; }
     const std::vector<ZoneReading>& getReadings() const { return readings; }

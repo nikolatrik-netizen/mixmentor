@@ -1,4 +1,5 @@
 #include "MelodyEngine.h"
+#include "MelodyModel.h"
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -7,44 +8,86 @@ namespace melody
 {
     namespace
     {
-        const int majorScale[] = { 0, 2, 4, 5, 7, 9, 11 };
-        const int minorScale[] = { 0, 2, 3, 5, 7, 8, 10 };
         const char* noteNames[] = { "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B" };
 
-        /** Converts between MIDI pitch and "scale steps" so melodies can be moved musically. */
+        // Each scale as 7 "parent" notes; pentatonic scales use 5 of them.
+        const int scaleNotes[numScaleTypes][7] = {
+            { 0, 2, 4, 5, 7, 9, 11 },   // major
+            { 0, 2, 3, 5, 7, 8, 10 },   // natural minor
+            { 0, 2, 3, 5, 7, 8, 11 },   // harmonic minor
+            { 0, 2, 3, 5, 7, 9, 10 },   // dorian
+            { 0, 1, 3, 5, 7, 8, 10 },   // phrygian
+            { 0, 2, 4, 5, 7, 9, 10 },   // mixolydian
+            { 0, 2, 3, 5, 7, 8, 10 },   // minor pentatonic (parent: natural minor)
+            { 0, 2, 4, 5, 7, 9, 11 },   // major pentatonic (parent: major)
+        };
+        const bool scaleUses[numScaleTypes][7] = {
+            { 1, 1, 1, 1, 1, 1, 1 }, { 1, 1, 1, 1, 1, 1, 1 }, { 1, 1, 1, 1, 1, 1, 1 }, { 1, 1, 1, 1, 1, 1, 1 },
+            { 1, 1, 1, 1, 1, 1, 1 }, { 1, 1, 1, 1, 1, 1, 1 },
+            { 1, 0, 1, 1, 1, 0, 1 },    // minor pentatonic: 1 b3 4 5 b7
+            { 1, 1, 1, 0, 1, 1, 0 },    // major pentatonic: 1 2 3 5 6
+        };
+        const char* scaleLabels[numScaleTypes] = { "major", "minor", "harmonic minor", "dorian", "phrygian",
+                                                   "mixolydian", "minor pentatonic", "major pentatonic" };
+
+        int degreeOf (int step) { return ((step % 7) + 7) % 7; }
+
+        /** Converts between MIDI pitch and "scale steps" so melodies can be moved musically.
+            Every pitch that comes out of fromStep() or snap() is in the scale. */
         struct ScaleMap
         {
             int root = 0;
-            std::vector<int> pcs;   // scale pitch classes relative to root (7 notes)
+            int mode = 1;            // statistics to use: 0 major-type, 1 minor-type
+            int pcs[7] = {};
+            bool uses[7] = {};
 
-            int toStep (int pitch) const
+            bool usesDegree (int step) const { return uses[degreeOf (step)]; }
+
+            /** Nearest allowed scale step (ties go down). */
+            int allowedStep (int step) const
             {
-                const int rel = pitch - root;
-                const int octave = (int) std::floor (rel / 12.0);
-                const int pc = rel - octave * 12;
-                int idx = 0;
-                for (int i = 0; i < (int) pcs.size(); ++i)
-                    if (pcs[(size_t) i] <= pc) idx = i;
-                return octave * 7 + idx;
+                for (int d = 0; d < 4; ++d)
+                {
+                    if (usesDegree (step - d)) return step - d;
+                    if (usesDegree (step + d)) return step + d;
+                }
+                return step;
             }
 
             int fromStep (int step) const
             {
+                step = allowedStep (step);
                 const int octave = (int) std::floor (step / 7.0);
-                const int idx = step - octave * 7;
-                return root + octave * 12 + pcs[(size_t) idx];
+                return root + octave * 12 + pcs[degreeOf (step)];
+            }
+
+            /** The scale step of the scale note nearest to this pitch. */
+            int toStep (int pitch) const
+            {
+                int bestStep = 0, bestDist = 1000;
+                const int rel = pitch - root;
+                const int base = (int) std::floor (rel / 12.0) * 7;
+                for (int s = base - 7; s <= base + 14; ++s)
+                {
+                    if (! usesDegree (s)) continue;
+                    const int pitchOfStep = root + (int) std::floor (s / 7.0) * 12 + pcs[degreeOf (s)];
+                    const int dist = std::abs (pitchOfStep - pitch);
+                    if (dist < bestDist || (dist == bestDist && pitchOfStep < pitch)) { bestDist = dist; bestStep = s; }
+                }
+                return bestStep;
             }
 
             int snap (int pitch) const { return fromStep (toStep (pitch)); }
-            bool isChordTone (int step) const { const int d = ((step % 7) + 7) % 7; return d == 0 || d == 2 || d == 4; }
+            bool isChordTone (int step) const { const int d = degreeOf (step); return d == 0 || d == 2 || d == 4; }
         };
 
         ScaleMap scaleFor (const Analysis& a)
         {
             ScaleMap m;
             m.root = a.root;
-            for (int i = 0; i < 7; ++i)
-                m.pcs.push_back (a.minor ? minorScale[i] : majorScale[i]);
+            const int t = juce::jlimit (0, (int) numScaleTypes - 1, a.scaleType);
+            m.mode = (t == major || t == mixolydian || t == majorPentatonic) ? 0 : 1;
+            for (int i = 0; i < 7; ++i) { m.pcs[i] = scaleNotes[t][i]; m.uses[i] = scaleUses[t][i]; }
             return m;
         }
 
@@ -78,11 +121,20 @@ namespace melody
 
         Phrase clampRange (Phrase p, const Analysis& a, const ScaleMap& m)
         {
-            const int lo = juce::jmax (24, a.lowest - 7), hi = juce::jmin (108, a.highest + 7);
+            if (p.empty()) return p;
+            const int lo = juce::jmax (24, a.lowest - 7), hi = juce::jmin (108, a.highest + 12);
+            // Move the whole idea by octaves first (keeps its shape), and only fold single notes
+            // if it's still out of range.
+            int top = 0, bottom = 127;
+            for (auto& n : p) { top = juce::jmax (top, n.pitch); bottom = juce::jmin (bottom, n.pitch); }
+            int shift = 0;
+            while (top + shift > hi && bottom + shift - 12 >= lo - 5) shift -= 12;
+            while (bottom + shift < lo && top + shift + 12 <= hi + 5) shift += 12;
             for (auto& n : p)
             {
-                while (n.pitch < lo) n.pitch += 12;
-                while (n.pitch > hi) n.pitch -= 12;
+                n.pitch += shift;
+                while (n.pitch < lo - 5) n.pitch += 12;
+                while (n.pitch > hi + 5) n.pitch -= 12;
                 n.pitch = m.snap (n.pitch);
             }
             return p;
@@ -90,32 +142,276 @@ namespace melody
 
         // ---- the variations ---------------------------------------------------------------
 
-        /** Same rhythm, new notes: a guided random walk through the scale. */
-        Phrase newNotes (const Phrase& in, const Analysis& a, const ScaleMap& m, juce::Random& rnd)
-        {
-            Phrase out = in;
-            int step = m.toStep (in.front().pitch);
-            const int lo = m.toStep (a.lowest) - 2, hi = m.toStep (a.highest) + 2;
+        // ---- the trained note model -----------------------------------------------------
 
-            for (size_t i = 0; i < out.size(); ++i)
+        struct Slot { double start = 0.0, length = 0.25; float velocity = 0.8f; };
+
+        /** Where a note falls in the bar: 0 bar or half-bar, 1 other beats, 2 8ths, 3 16ths/other. */
+        int metricOf (double start)
+        {
+            double b = std::fmod (start, 4.0);
+            if (b < 0) b += 4.0;
+            auto near = [] (double x, double y) { return std::abs (x - y) < 0.02; };
+            if (near (b, 0.0) || near (b, 2.0) || near (b, 4.0)) return 0;
+            const double f = b - std::floor (b);
+            if (f < 0.02 || f > 0.98) return 1;
+            if (near (f, 0.5)) return 2;
+            return 3;
+        }
+
+        std::vector<Slot> slotsOf (const Phrase& p)
+        {
+            std::vector<Slot> out;
+            for (auto& n : p) out.push_back ({ n.start, n.length, n.velocity });
+            return out;
+        }
+
+        std::vector<int> contourOf (const Phrase& p)
+        {
+            std::vector<int> c;
+            for (size_t i = 1; i < p.size(); ++i)
+                c.push_back (p[i].pitch > p[i - 1].pitch ? 1 : p[i].pitch < p[i - 1].pitch ? -1 : 0);
+            return c;
+        }
+
+        struct LineSpec
+        {
+            int lo = 0, hi = 14;                 // allowed range in scale steps
+            int startStep = -1000;               // -1000 = let the model choose
+            const std::vector<int>* contour = nullptr;
+            float contourWeight = 0.0f;          // how strongly to follow the contour (0..1)
+            bool endOnRoot = true;               // false = end on any stable note (1st, 3rd, 5th)
+        };
+
+        /** Writes notes for the given rhythm with the statistics learned from real melodies, plus the
+            classic rules: resolve big leaps by step the other way, land strong beats on stable notes,
+            one clear high point, end on a stable note. Many candidates are written and the most
+            natural ones kept. */
+        std::vector<int> modelSteps (const std::vector<Slot>& slots, const ScaleMap& m, const LineSpec& spec, juce::Random& rnd)
+        {
+            const int n = (int) slots.size();
+            if (n == 0) return {};
+            const int mode = m.mode;
+
+            struct Candidate { float score; std::vector<int> steps; };
+            std::vector<Candidate> pool;
+
+            for (int attempt = 0; attempt < 220; ++attempt)
             {
-                if (i > 0)
+                std::vector<int> st;
+                st.reserve ((size_t) n);
+                float logp = 0.0f;
+
+                // First note
+                int first = spec.startStep;
+                if (first == -1000)
                 {
-                    const int moves[] = { -2, -1, -1, 1, 1, 2, 0, 3, -3 };
-                    step += moves[rnd.nextInt (9)];
-                    if (step < lo) step += 2;
-                    if (step > hi) step -= 2;
-                    // Strong beats prefer chord tones (1st, 3rd, 5th of the key).
-                    if (isStrongBeat (out[i].start) && ! m.isChordTone (step))
-                        step += (rnd.nextBool() ? 1 : -1);
+                    const int mid = (spec.lo + spec.hi) / 2;
+                    float w[7] = {};
+                    float total = 0.0f;
+                    for (int d = 0; d < 7; ++d) { w[d] = m.uses[d] ? model::firstProb[mode][d] : 0.0f; total += w[d]; }
+                    float r = rnd.nextFloat() * total;
+                    int deg = 0;
+                    for (; deg < 6; ++deg) { r -= w[deg]; if (r <= 0.0f) break; }
+                    first = (int) std::floor ((mid - deg) / 7.0 + 0.5) * 7 + deg;
                 }
-                out[i].pitch = m.fromStep (step);
+                st.push_back (juce::jlimit (spec.lo, spec.hi, m.allowedStep (first)));
+
+                for (int i = 1; i < n; ++i)
+                {
+                    const int cur = st.back();
+                    const int deg = degreeOf (cur);
+                    const int mc = metricOf (slots[(size_t) i].start);
+                    const bool last = i == n - 1;
+                    const int prevMove = i >= 2 ? st[(size_t) i - 1] - st[(size_t) i - 2] : 0;
+                    const bool twoRepeats = i >= 3 && st[(size_t) i - 1] == st[(size_t) i - 2] && st[(size_t) i - 2] == st[(size_t) i - 3];
+
+                    float w[15] = {};
+                    float total = 0.0f;
+                    for (int k = 0; k < 15; ++k)
+                    {
+                        const int move = k - 7;
+                        const int next = cur + move;
+                        if (next < spec.lo || next > spec.hi || ! m.usesDegree (next)) continue;
+                        float x = model::stepProb[mode][deg][mc][k];
+
+                        if (std::abs (prevMove) >= 3)                               // after a leap...
+                            x *= (move * prevMove < 0 && std::abs (move) <= 2) ? 2.5f   // ...step back the other way
+                               : (move * prevMove > 0 ? 0.25f : 1.0f);
+                        if (move == 0 && twoRepeats) x *= 0.15f;                    // no long note repeats
+                        if (mc == 0 && ! m.isChordTone (next)) x *= 0.6f;           // stable notes on strong beats
+
+                        if (spec.contour != nullptr && (size_t) (i - 1) < spec.contour->size())
+                        {
+                            const int c = (*spec.contour)[(size_t) i - 1];
+                            const int dir = move > 0 ? 1 : move < 0 ? -1 : 0;
+                            if (dir == c) x *= 1.0f + spec.contourWeight * 2.0f;
+                            else if (c != 0 && dir == -c) x *= 1.0f - spec.contourWeight * 0.7f;
+                        }
+
+                        if (last)
+                        {
+                            const int d = degreeOf (next);
+                            x *= spec.endOnRoot ? (d == 0 ? 8.0f : (d == 2 || d == 4) ? 0.6f : 0.03f)
+                                                : (d == 0 || d == 2 || d == 4 ? 3.0f : 0.1f);
+                            x *= 1.0f / (1.0f + 0.5f * (float) std::abs (move));   // arrive smoothly
+                        }
+                        w[k] = x;
+                        total += x;
+                    }
+
+                    if (total <= 0.0f) { st.push_back (cur); logp -= 4.0f; continue; }
+                    float r = rnd.nextFloat() * total;
+                    int pick = 7;
+                    for (int k = 0; k < 15; ++k) { if (w[k] <= 0.0f) continue; pick = k; r -= w[k]; if (r <= 0.0f) break; }
+                    logp += std::log (juce::jmax (1.0e-4f, model::stepProb[mode][deg][mc][pick]));
+                    st.push_back (cur + pick - 7);
+                }
+
+                // Score the whole line
+                float score = logp / (float) juce::jmax (1, n - 1);
+                const int top = *std::max_element (st.begin(), st.end());
+                const int low = *std::min_element (st.begin(), st.end());
+                int peaks = 0;
+                for (int i = 0; i < n; ++i)
+                    if (st[(size_t) i] == top && (i == 0 || st[(size_t) i - 1] != top)) ++peaks;
+                if (peaks == 1) score += 0.35f;                         // one clear high point
+                if (top - low >= 3 && top - low <= 9) score += 0.25f;    // uses some range, but singable
+                if (top - low < 2 && n > 4) score -= 0.6f;               // too flat
+                int repeats = 0;
+                for (int i = 1; i < n; ++i) if (st[(size_t) i] == st[(size_t) i - 1]) ++repeats;
+                if (n > 4 && repeats > n * 0.4f) score -= 0.5f;          // stuck on one note
+                for (int i = 2; i < n; ++i)                              // two big leaps in a row the same way
+                {
+                    const int m1 = st[(size_t) i - 1] - st[(size_t) i - 2], m2 = st[(size_t) i] - st[(size_t) i - 1];
+                    if (std::abs (m1) >= 3 && std::abs (m2) >= 3 && m1 * m2 > 0) score -= 0.4f;
+                }
+                pool.push_back ({ score, std::move (st) });
             }
 
-            // End on the root or the 5th so the phrase resolves.
-            const int last = m.toStep (out.back().pitch);
-            const int rootStep = (int) std::round (last / 7.0) * 7;
-            out.back().pitch = m.fromStep (rnd.nextBool() ? rootStep : rootStep + 4);
+            std::sort (pool.begin(), pool.end(), [] (const Candidate& x, const Candidate& y) { return x.score > y.score; });
+            const int keep = juce::jmin (5, (int) pool.size());
+            return pool[(size_t) rnd.nextInt (keep)].steps;
+        }
+
+        LineSpec specFor (const Analysis& a, const ScaleMap& m)
+        {
+            LineSpec spec;
+            spec.lo = m.toStep (a.lowest) - 2;
+            spec.hi = m.toStep (a.highest) + 2;
+            while (spec.hi - spec.lo < 9) { --spec.lo; ++spec.hi; }   // room for a real melody
+            while (spec.hi - spec.lo > 14) { ++spec.lo; --spec.hi; }  // ...but singable
+            return spec;
+        }
+
+        Phrase phraseFrom (const std::vector<Slot>& slots, const std::vector<int>& steps, const ScaleMap& m)
+        {
+            Phrase out;
+            for (size_t i = 0; i < slots.size() && i < steps.size(); ++i)
+                out.push_back ({ slots[i].start, slots[i].length, m.fromStep (steps[i]), slots[i].velocity });
+            return out;
+        }
+
+        /** Same rhythm, new notes written by the trained model, loosely following your melody's shape. */
+        Phrase newNotes (const Phrase& in, const Analysis& a, const ScaleMap& m, juce::Random& rnd)
+        {
+            auto spec = specFor (a, m);
+            const auto contour = contourOf (in);
+            spec.contour = &contour;
+            spec.contourWeight = 0.35f;
+            spec.startStep = m.toStep (in.front().pitch) + (rnd.nextBool() ? 0 : (rnd.nextBool() ? 2 : -2));
+            const auto slots = slotsOf (in);
+            return phraseFrom (slots, modelSteps (slots, m, spec, rnd), m);
+        }
+
+        /** A new rhythm from the most common one-bar rhythms in real songs (repeating like A A B A),
+            with notes from the trained model. */
+        Phrase freshRhythm (const Phrase& in, const Analysis& a, const ScaleMap& m, juce::Random& rnd)
+        {
+            const int bars = juce::jmax (1, (int) std::round (a.lengthBeats / 4.0));
+            const float wantPerBar = juce::jlimit (2.0f, 12.0f, (float) in.size() / (float) bars);
+
+            auto pickPattern = [&] (float density, int avoid)
+            {
+                float total = 0.0f;
+                std::vector<float> w ((size_t) model::numBarRhythms);
+                for (int k = 0; k < model::numBarRhythms; ++k)
+                {
+                    const int count = juce::countNumberOfBits ((juce::uint32) model::barRhythms[k]);
+                    const bool startsOnOne = (model::barRhythms[k] & 1) != 0;
+                    float x = (float) model::barRhythmCounts[k] / (1.0f + 1.5f * std::abs ((float) count - density));
+                    if (! startsOnOne) x *= 0.5f;
+                    if (k == avoid) x = 0.0f;
+                    w[(size_t) k] = x; total += x;
+                }
+                float r = rnd.nextFloat() * total;
+                for (int k = 0; k < model::numBarRhythms; ++k) { r -= w[(size_t) k]; if (r <= 0.0f) return k; }
+                return 0;
+            };
+
+            const int A = pickPattern (wantPerBar, -1);
+            const int B = pickPattern (wantPerBar, A);
+            const int C = pickPattern (juce::jmax (2.0f, wantPerBar * 0.6f), -1);   // calmer ending
+            std::vector<int> form;
+            for (int b = 0; b < bars; ++b)
+                form.push_back (bars == 1 ? A : b == bars - 1 ? (bars >= 4 ? C : B) : (b % 4 == 2 ? B : A));
+
+            std::vector<Slot> slots;
+            std::vector<int> barOf;
+            for (int b = 0; b < bars; ++b)
+            {
+                const unsigned short mask = model::barRhythms[form[(size_t) b]];
+                for (int k = 0; k < 16; ++k)
+                    if ((mask >> k) & 1)
+                    {
+                        const float vel = (k % 4 == 0) ? 0.85f : 0.7f;
+                        slots.push_back ({ b * 4.0 + k * 0.25, 0.25, vel });
+                        barOf.push_back (b);
+                    }
+            }
+            if (slots.empty()) return in;
+            for (size_t i = 0; i < slots.size(); ++i)
+            {
+                const double next = i + 1 < slots.size() ? slots[i + 1].start : bars * 4.0;
+                slots[i].length = juce::jlimit (0.25, 2.0, next - slots[i].start) * 0.95;
+            }
+
+            auto spec = specFor (a, m);
+            spec.startStep = m.toStep (in.front().pitch);
+            auto steps = modelSteps (slots, m, spec, rnd);
+
+            // Repetition makes it catchy: bars that share bar 1's rhythm also reuse its notes
+            // (all but the very last note, which keeps its resolution).
+            std::vector<int> barOneSteps;
+            for (size_t i = 0; i < slots.size(); ++i) if (barOf[i] == 0) barOneSteps.push_back (steps[i]);
+            for (int b = 1; b < bars; ++b)
+            {
+                if (form[(size_t) b] != form[0]) continue;
+                size_t k = 0;
+                for (size_t i = 0; i < slots.size(); ++i)
+                    if (barOf[i] == b && k < barOneSteps.size() && i + 1 < slots.size())
+                        steps[i] = barOneSteps[k++];
+            }
+            return phraseFrom (slots, steps, m);
+        }
+
+        /** Keep the original as the "call" and write an answer phrase that resolves home. */
+        Phrase callResponse (const Phrase& in, const Analysis& a, const ScaleMap& m, juce::Random& rnd)
+        {
+            Phrase out = in;
+            auto spec = specFor (a, m);
+            auto contour = contourOf (in);
+            // The answer opens like the call (so it's recognisable) and then turns the other way.
+            for (size_t i = contour.size() / 2; i < contour.size(); ++i) contour[i] = -contour[i];
+            spec.contour = &contour;
+            spec.contourWeight = 0.45f;
+            spec.startStep = m.toStep (in.front().pitch) - 2;
+            spec.endOnRoot = true;
+            auto slots = slotsOf (in);
+            for (auto& sl : slots) sl.start += a.lengthBeats;
+            auto answer = phraseFrom (slots, modelSteps (slots, m, spec, rnd), m);
+            if (! answer.empty()) answer.back().length = juce::jmax (answer.back().length, 0.5);
+            out.insert (out.end(), answer.begin(), answer.end());
             return out;
         }
 
@@ -126,40 +422,6 @@ namespace melody
             const int axis = m.toStep (in.front().pitch);
             for (auto& n : out)
                 n.pitch = m.fromStep (axis - (m.toStep (n.pitch) - axis));
-            return out;
-        }
-
-        /** Play it backwards in time. */
-        Phrase retrograde (const Phrase& in, const Analysis& a)
-        {
-            Phrase out;
-            for (auto& n : in)
-            {
-                Note r = n;
-                r.start = juce::jmax (0.0, a.lengthBeats - (n.start + n.length));
-                out.push_back (r);
-            }
-            sortByTime (out);
-            return out;
-        }
-
-        /** Keep the original as the "call" and write an answer phrase that resolves home. */
-        Phrase callResponse (const Phrase& in, const Analysis& a, const ScaleMap& m, juce::Random& rnd)
-        {
-            Phrase out = in;
-            const double offset = a.lengthBeats;
-            Phrase answer = newNotes (in, a, m, rnd);
-
-            // Answer starts a third lower and moves in contrary direction to the call's ending.
-            for (auto& n : answer)
-            {
-                n.start += offset;
-                n.pitch = m.fromStep (m.toStep (n.pitch) - 2);
-            }
-            const int last = m.toStep (answer.back().pitch);
-            answer.back().pitch = m.fromStep ((int) std::round (last / 7.0) * 7);   // land on the root
-            answer.back().length = juce::jmax (answer.back().length, 0.5);
-            out.insert (out.end(), answer.begin(), answer.end());
             return out;
         }
 
@@ -383,11 +645,27 @@ namespace melody
         return f;
     }
 
-    Analysis analyse (const Phrase& input)
+    juce::StringArray scaleTypeNames()
+    {
+        juce::StringArray names;
+        for (auto* l : scaleLabels) names.add (l);
+        return names;
+    }
+
+    juce::StringArray keyNames()
+    {
+        juce::StringArray names;
+        for (auto* n : noteNames) names.add (n);
+        return names;
+    }
+
+    Analysis analyse (const Phrase& input, int forcedRoot, int forcedScale)
     {
         Analysis a;
         if (input.empty())
         {
+            if (forcedRoot >= 0) a.root = forcedRoot;
+            if (forcedScale >= 0) a.scaleType = forcedScale;
             a.keyName = "-";
             return a;
         }
@@ -397,9 +675,17 @@ namespace melody
         static const double majorProfile[] = { 6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88 };
         static const double minorProfile[] = { 6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17 };
 
+        // Long notes, notes on the beat and the last note say most about the home key.
         double hist[12] = {};
-        for (auto& n : input)
-            hist[((n.pitch % 12) + 12) % 12] += juce::jmax (0.1, n.length);
+        for (size_t i = 0; i < input.size(); ++i)
+        {
+            const auto& n = input[i];
+            double w = juce::jlimit (0.1, 2.0, n.length);
+            if (std::abs (n.start - std::round (n.start)) < 0.05) w *= 1.5;
+            if (std::abs (std::fmod (n.start, 4.0)) < 0.05) w *= 1.5;
+            if (i + 1 == input.size()) w *= 2.0;
+            hist[((n.pitch % 12) + 12) % 12] += w;
+        }
 
         auto correlate = [&hist] (const double* profile, int root)
         {
@@ -422,9 +708,14 @@ namespace melody
             if (cMaj > best) { best = cMaj; a.root = r; a.minor = false; }
             if (cMin > best) { best = cMin; a.root = r; a.minor = true; }
         }
-        a.keyName = juce::String (noteNames[a.root]) + (a.minor ? " minor" : " major");
+        a.scaleType = a.minor ? minorNatural : major;
+        if (forcedRoot >= 0 && forcedRoot < 12)   { a.root = forcedRoot; a.keyFromUser = true; }
+        if (forcedScale >= 0 && forcedScale < numScaleTypes) { a.scaleType = forcedScale; a.keyFromUser = true; }
+        a.minor = ! (a.scaleType == major || a.scaleType == mixolydian || a.scaleType == majorPentatonic);
+        a.keyName = juce::String (noteNames[a.root]) + " " + scaleLabels[a.scaleType];
         for (int i = 0; i < 7; ++i)
-            a.scale.push_back ((a.root + (a.minor ? minorScale[i] : majorScale[i])) % 12);
+            if (scaleUses[a.scaleType][i])
+                a.scale.push_back ((a.root + scaleNotes[a.scaleType][i]) % 12);
 
         a.lowest = 127; a.highest = 0;
         double end = 0.0;
@@ -461,27 +752,29 @@ namespace melody
         const auto m = scaleFor (a);
         auto rnd = [seed] (int k) { return juce::Random (seed * 7919 + k * 104729 + 17); };
 
-        juce::Random r1 = rnd (1), r2 = rnd (2), r3 = rnd (3), r4 = rnd (4);
+        juce::Random r1 = rnd (1), r2 = rnd (2), r3 = rnd (3), r4 = rnd (4), r5 = rnd (5);
 
-        out.push_back ({ "new notes", "same rhythm, new notes from " + a.keyName + ", resolving home",
-                         clampRange (newNotes (input, a, m, r1), a, m) });
+        out.push_back ({ "new notes", "same rhythm, new notes in " + a.keyName + ", following your melody's shape",
+                         newNotes (input, a, m, r1) });
+        out.push_back ({ "fresh rhythm", "a new rhythm from real hit melodies, repeating like A A B A",
+                         freshRhythm (input, a, m, r5) });
         out.push_back ({ "call & response", "your melody, then an answer phrase that lands on the root",
-                         clampRange (callResponse (input, a, m, r2), a, m) });
+                         callResponse (input, a, m, r2) });
         out.push_back ({ "genre groove", "re-shaped in the genre's rhythm and swing",
-                         clampRange (genreGroove (input, a, m, feel, r3), a, m) });
+                         genreGroove (input, a, m, feel, r3) });
         out.push_back ({ "motif sequence", "the opening motif repeated and moved up the scale",
-                         clampRange (sequence (input, a, m), a, m) });
+                         sequence (input, a, m) });
         out.push_back ({ "embellished", feel.extended ? "passing notes and jazzy 7th/9th colour tones"
                                                       : "passing and neighbour notes between your notes",
-                         clampRange (embellished (input, m, feel, r4), a, m) });
+                         embellished (input, m, feel, r4) });
         out.push_back ({ "simplified", "only the strongest notes: a cleaner, more singable hook",
                          simplified (input) });
-        out.push_back ({ "hook lift", "an octave up with chord tones on the beat, for a chorus or drop",
+        out.push_back ({ "hook lift", "an octave up with stable notes on the beat, for a chorus or drop",
                          hookLift (input, m) });
         out.push_back ({ "inversion", "the melody mirrored upside-down in the same key",
-                         clampRange (inversion (input, m), a, m) });
-        out.push_back ({ "reversed", "played backwards: same notes, new shape",
-                         retrograde (input, a) });
+                         inversion (input, m) });
+        for (auto& v : out)   // everything is forced into the key and a sensible range
+            v.notes = clampRange (v.notes, a, m);
         for (auto& v : out)   // call & response is twice as long (call + answer); everything else keeps the length
             v.notes = tidy (v.notes, v.name == "call & response" ? a.lengthBeats * 2.0 : a.lengthBeats);
         return out;

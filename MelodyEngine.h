@@ -15,11 +15,18 @@ namespace melody
 
     using Phrase = std::vector<Note>;
 
-    /** What the analysis found in the input melody. */
+    /** Scales you can lock the ideas to. */
+    enum ScaleType { major = 0, minorNatural, harmonicMinor, dorian, phrygian, mixolydian, minorPentatonic, majorPentatonic, numScaleTypes };
+    juce::StringArray scaleTypeNames();
+    juce::StringArray keyNames();
+
+    /** What the analysis found in the input melody (or the key you picked). */
     struct Analysis
     {
         int root = 0;                 // 0 = C ... 11 = B
-        bool minor = true;
+        bool minor = true;            // minor-type scale (natural/harmonic minor, dorian, phrygian, minor pentatonic)
+        int scaleType = minorNatural;
+        bool keyFromUser = false;     // true when the key was picked, false when detected
         juce::String keyName;         // e.g. "A minor"
         std::vector<int> scale;       // pitch classes of the detected scale, root first
         int lowest = 60, highest = 72;
@@ -50,7 +57,8 @@ namespace melody
 
     GenreFeel feelForGenre (const juce::String& genreId);
 
-    Analysis analyse (const Phrase& input);
+    /** Detects key and range. forcedRoot (0-11) / forcedScale override the detection; -1 = auto. */
+    Analysis analyse (const Phrase& input, int forcedRoot = -1, int forcedScale = -1);
 
     /** Creates the full set of variations. The seed makes "new ideas" reproducible. */
     std::vector<Variation> generate (const Phrase& input, const Analysis& analysis,
