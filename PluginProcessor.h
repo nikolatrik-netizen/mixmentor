@@ -8,45 +8,10 @@
 #include "MelodyCore.h"
 #include "TrackRegistry.h"
 #include "Meter.h"
+#include "LiveListener.h"
+#include "Advisor.h"
 
 /** One range the analysis asked you to adjust, and how your fix went. */
-struct FixIssue
-{
-    int zone = -1;                  // index of the frequency zone in the guide
-    juce::String label;
-    float lowHz = 0.0f, highHz = 0.0f, focusHz = 0.0f;
-    int action = 1;                 // +1 = cut, -1 = boost
-    bool resonance = false;         // a single ringing frequency rather than a range
-    bool bump = false;              // measured as a bump/dip against its neighbours (else against the target range)
-    float amount = 3.0f;            // suggested change in dB
-    float baseline = 0.0f;          // what the analysis measured (relative level, or how far a resonance sticks out)
-    float baselineLevel = 0.0f;     // the range's level compared with the rest of the track, far from it (for re-checks)
-    float latestChange = 0.0f;      // dB moved in the right direction at the last re-check
-    int status = 0;                 // 0 to do, 1 fixed, 2 improved, 3 no change heard, 4 got worse, 5 range cut but still ringing
-    juce::String metric;            // non-empty = a dynamics / stereo / level issue (no zone): "crest", "swing", "lowwidth", ...
-    float limit = 0.0f;             // for metric issues: the value that counts as fixed
-    float fixedValue = 0.0f;        // what was measured when it was marked fixed (so a later analysis doesn't re-flag noise)
-
-    juce::String key() const { return metric.isNotEmpty() ? "m:" + metric : (resonance ? "r:" : "z:") + label; }
-};
-
-/** The result of "analyse": a frozen list of things to fix. Saved with the project. */
-struct FixSession
-{
-    bool valid = false;
-    juce::String genreId, instrumentId;
-    std::vector<FixIssue> issues;
-    juce::StringArray goodZones;
-    bool heardChange = true;        // did the last re-check hear any of the user's moves?
-    float baseLoudness = -100.0f;   // loudness of the analysed loop
-    float loopDiffLu = 0.0f;        // re-check loop minus analysed loop
-    std::vector<float> baseBands;   // third-octave spectrum of the analysed loop (to notice a different part of the song)
-    float contentDiffDb = 0.0f;     // how different the re-checked music was, away from the ranges being fixed
-    bool contentMismatch = false;   // last re-check heard different music: results weren't updated
-    double startPpq = -1.0, endPpq = -1.0;   // the bars that were analysed (re-check listens to the same ones); -1 = not synced
-    int checks = 0;
-};
-
 /** Passes audio through (with the trim) and taps it for analysis (spectrum + levels). */
 class MixMentorProcessor : public juce::AudioProcessor
 {
@@ -57,8 +22,7 @@ public:
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     juce::MidiBuffer melodyMidi;
-    juce::AbstractFifo meterFifo { 512 };
-    std::array<MeterFrame, 512> meterBuffer {};
+
 
     void releaseResources() override {}
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
@@ -88,35 +52,13 @@ public:
     //==============================================================================
     // Shared with the editor
 
-    /** GUI thread: pulls up to maxSamples of the captured stereo audio (only what's inside the
-        bars being analysed), in order. Returns how many were read. */
-    int readAnalysisSamples (float* left, float* right, int maxSamples);
+    /** The editor turns this on while it's open: every block (stereo, after the trim) is streamed
+        to it together with its song position. */
+    std::atomic<bool> listening { false };
+    /** GUI thread: takes the next streamed block. Returns its length (0 if none). */
+    int readStreamBlock (float* left, float* right, int maxSamples, BlockInfo& info);
     /** GUI thread: latest audio (mono) for the live spectrum display. */
     int readDisplaySamples (float* dest, int maxSamples);
-
-    //==============================================================================
-    // Bar-synced capture: analyse and re-check listen to exactly the same bars of the song.
-    enum CaptureState { captureIdle = 0, captureWaiting = 1, captureRunning = 2, captureDone = 3 };
-    /** startPpq < 0: pick the bars automatically (the loop, or the next 4 bars). */
-    void requestCapture (double startPpq, double endPpq)
-    {
-        captureStartPpq.store (startPpq);
-        captureEndPpq.store (endPpq);
-        captureProgress.store (0.0f);
-        captureState.store (captureWaiting);
-    }
-    void cancelCapture()                    { captureState.store (captureIdle); }
-    int getCaptureState() const             { return captureState.load(); }
-    void acknowledgeCaptureDone()           { captureState.store (captureIdle); }
-    double getCaptureStartPpq() const       { return captureStartPpq.load(); }
-    double getCaptureEndPpq() const         { return captureEndPpq.load(); }
-    float getCaptureProgress() const        { return captureProgress.load(); }
-    double getBarLengthPpq() const          { return barLengthPpq.load(); }
-    /** True when the host reports a playing song position (the bar-synced mode works). */
-    bool hostHasSongPosition() const        { return hostPosition.load(); }
-    bool hostIsPlaying() const              { return hostPlaying.load(); }
-    /** Increments when a capture had to start over (playback jumped away mid-way). */
-    int getCaptureRestarts() const          { return captureRestarts.load(); }
     /** Counts audio the GUI didn't pick up in time (the analysis then restarts its current frame). */
     int getDroppedCount() const { return droppedBlocks.load(); }
 
@@ -138,11 +80,10 @@ public:
     std::atomic<bool> instrumentChosenByUser { false };
 
     /** The current fix list (message thread only). */
-    FixSession fixSession;
+    Advisor advisor;                 // the suggestions (saved with the project)
     MelodyCore melody;
 
-    /** Message thread: takes the meter frames measured since the last call. */
-    int readMeterFrames (MeterFrame* dest, int maxFrames);               // the melody tab (previews through this track)
+               // the melody tab (previews through this track)
 
     /** Ticked workflow steps (bit n = step n), per genre id. Message thread only. */
     std::map<juce::String, juce::uint32> workflowProgress;
@@ -155,12 +96,10 @@ private:
     std::atomic<int> droppedBlocks { 0 };
     juce::AbstractFifo displayFifo { 1 << 16 };
     std::vector<float> displayBuffer = std::vector<float> ((size_t) (1 << 16), 0.0f);
-    std::atomic<int> captureState { captureIdle }, captureRestarts { 0 };
-    std::atomic<double> captureStartPpq { -1.0 }, captureEndPpq { -1.0 }, barLengthPpq { 4.0 };
-    std::atomic<float> captureProgress { 0.0f };
-    std::atomic<bool> hostPosition { false }, hostPlaying { false };
-    void pushCapture (const float* L, const float* R, int n);
-    LoudnessMeter meter;
+    struct StreamBlock { int numSamples = 0; BlockInfo info; };
+    juce::AbstractFifo blockFifo { 4096 };
+    std::array<StreamBlock, 4096> blockInfos {};
+
 
     std::atomic<float> peakSinceLastRead { 0.0f }, latestRms { 0.0f };
     std::atomic<double> currentSampleRate { 44100.0 };

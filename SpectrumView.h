@@ -4,6 +4,8 @@
 #include <juce_dsp/juce_dsp.h>
 #include "KnowledgeBase.h"
 #include "Analyzer.h"
+#include "Targets.h"
+#include <memory>
 
 /** What the fix list wants shown on a zone's label. */
 struct ZoneMark
@@ -28,6 +30,12 @@ public:
     /** The bars are complete: compute the result now. Returns false if there was no sound in them. */
     bool finishCapture();
     double getHeardSeconds() const { return analyzer.getHeardSeconds(); }
+    /** The last full loop (drawn as the white line). */
+    void setSnapshot (std::shared_ptr<Analyzer> a) { snapshot = std::move (a); repaint(); }
+    /** Target range drawn as a band (invalid = none). */
+    void setTarget (const TargetCurve& t) { target = t; repaint(); }
+    struct Highlight { float lowHz, highHz; juce::Colour colour; juce::String label; };
+    void setHighlights (std::vector<Highlight> h) { highlights = std::move (h); repaint(); }
     /** Text for the "listening" pill (empty = default). */
     void setCaptureStatus (const juce::String& text) { if (text != captureStatus) { captureStatus = text; repaint(); } }
     void updateSpectrum (double sampleRate, bool hasSignal);   // call from a GUI timer
@@ -89,6 +97,10 @@ private:
     double lastSampleRate = 44100.0;
     bool captureDone = false;
     juce::String captureStatus;
+    std::shared_ptr<Analyzer> snapshot;
+    TargetCurve target;
+    std::vector<Highlight> highlights;
+    bool hasSnapshot() const { return snapshot != nullptr && snapshot->hasResult(); }
     Analyzer analyzer;
     std::vector<ZoneMark> marks;
 

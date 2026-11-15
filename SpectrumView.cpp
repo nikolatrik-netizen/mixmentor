@@ -123,7 +123,11 @@ void SpectrumView::updateSpectrum (double sampleRate, bool hasSignal)
 
 float SpectrumView::averagedDbAt (float hz) const
 {
-    return analyzer.levelAt (hz) + tiltDb (hz);
+    const auto& a = hasSnapshot() ? *snapshot : analyzer;
+    // 1/6-octave smoothing, as the tonal balance is judged
+    double acc = 0.0;
+    for (int j = -2; j <= 2; ++j) acc += std::pow (10.0, a.levelAt (hz * std::pow (2.0f, (float) j / 24.0f)) / 10.0);
+    return (float) (10.0 * std::log10 (acc / 5.0 + 1.0e-20)) + tiltDb (hz);
 }
 
 void SpectrumView::computeReadings()
@@ -216,6 +220,47 @@ void SpectrumView::paint (juce::Graphics& g)
         g.fillRect (x2 - 1.0f, 0.0f, 1.0f, bounds.getHeight());
     }
 
+    // Target range (genre average or your reference), level-matched to the last loop
+    if (target.valid && hasSnapshot())
+    {
+        double off = 0.0; int n = 0;
+        for (float f = 100.0f; f <= 8000.0f; f *= 1.12246f) { off += averagedDbAt (f) - (target.levelAt (f) + tiltDb (f)); ++n; }
+        off /= juce::jmax (1, n);
+        juce::Path band, upper, lower;
+        std::vector<juce::Point<float>> lo;
+        bool first = true;
+        for (int px = 0; px <= getWidth(); px += 4)
+        {
+            const float f = freqForX ((float) px);
+            if (f < 25.0f || f > 18000.0f) continue;
+            const float mid = target.levelAt (f) + tiltDb (f) + (float) off;
+            const float tol = target.toleranceAt (f);
+            const float yTop = yForDb (mid + tol), yBot = yForDb (mid - tol);
+            if (first) { band.startNewSubPath ((float) px, yTop); upper.startNewSubPath ((float) px, yTop); first = false; }
+            else       { band.lineTo ((float) px, yTop); upper.lineTo ((float) px, yTop); }
+            lo.push_back ({ (float) px, yBot });
+        }
+        for (auto it = lo.rbegin(); it != lo.rend(); ++it) band.lineTo (*it);
+        band.closeSubPath();
+        for (size_t k = 0; k < lo.size(); ++k) { if (k == 0) lower.startNewSubPath (lo[k]); else lower.lineTo (lo[k]); }
+        g.setColour (col::good.withAlpha (0.10f));
+        g.fillPath (band);
+        g.setColour (col::good.withAlpha (0.45f));
+        g.strokePath (upper, juce::PathStrokeType (1.0f));
+        g.strokePath (lower, juce::PathStrokeType (1.0f));
+    }
+
+    // What the suggestions are about
+    for (auto& h : highlights)
+    {
+        const float x1 = xForFreq (h.lowHz), x2 = juce::jmax (x1 + 4.0f, xForFreq (h.highHz));
+        g.setColour (h.colour.withAlpha (0.14f));
+        g.fillRect (juce::Rectangle<float> (x1, 0.0f, x2 - x1, bounds.getHeight()));
+        g.setColour (h.colour.withAlpha (0.8f));
+        g.fillRect (x1, 0.0f, 1.0f, bounds.getHeight());
+        g.fillRect (x2 - 1.0f, 0.0f, 1.0f, bounds.getHeight());
+    }
+
     // Live spectrum: darker blue area, like a filled analyzer
     juce::Path curve;
     const float binHz = (float) lastSampleRate / (float) fftSize;
@@ -239,8 +284,8 @@ void SpectrumView::paint (juce::Graphics& g)
     g.setColour (col::liveFill.brighter (0.9f).withAlpha (0.6f));
     g.strokePath (curve, juce::PathStrokeType (1.0f));
 
-    // The analysed snapshot (white): frozen once "analyse" / "re-check" has finished
-    if (analyzer.hasResult())
+    // The last full loop (white)
+    if (hasSnapshot())
     {
         juce::Path avg;
         for (int px = 0; px <= getWidth(); px += 3)
@@ -274,8 +319,7 @@ void SpectrumView::paint (juce::Graphics& g)
     for (size_t i = 0; i < zones.size(); ++i)
     {
         const auto& z = zones[i];
-        const float x1 = xForFreq (z.lowHz), x2 = xForFreq (z.highHz);
-        const float w = x2 - x1;
+        const float x1 = xForFreq (z.lowHz);
         const auto kindColour = colourForKind (z.kind);
         const ZoneMark mark = i < marks.size() ? marks[i] : ZoneMark();
 
@@ -288,23 +332,6 @@ void SpectrumView::paint (juce::Graphics& g)
             case 5:         markColour = col::accent; break; // improved, a bit more
             case 6:         markColour = col::textDim; break;// no change heard
             default: break;
-        }
-
-        // Highlight the ranges still to fix, with the target range from the analysis
-        if ((mark.state == 1 || mark.state == 2 || mark.state >= 5) && analyzer.hasResult())
-        {
-            g.setColour (markColour.withAlpha (0.10f));
-            g.fillRect (juce::Rectangle<float> (x1, 0.0f, w, bounds.getHeight()));
-
-            const float yTop = yForDb (referenceDb + juce::jmin (z.targetMaxDb, 30.0f));
-            const float yBottom = yForDb (referenceDb + z.targetMinDb);
-            const auto box = juce::Rectangle<float> (x1 + 3.0f, yTop, w - 6.0f, juce::jmax (1.0f, yBottom - yTop));
-            juce::Path outline, dashed;
-            outline.addRoundedRectangle (box, 3.0f);
-            const float dashes[] = { 3.0f, 3.0f };
-            juce::PathStrokeType (1.0f).createDashedStroke (dashed, outline, dashes, 2);
-            g.setColour (white.withAlpha (0.45f));
-            g.fillPath (dashed);
         }
 
         // Label pill
@@ -346,34 +373,32 @@ void SpectrumView::paint (juce::Graphics& g)
         g.setFont (font (14.0f));
         g.drawText ("pick a genre and instrument to see frequency zones", getLocalBounds(), juce::Justification::centred);
     }
-    else if (analyzer.isCapturing())
+    else if (captureStatus.isNotEmpty() && ! hasSnapshot())
     {
-        const auto text = captureStatus.isNotEmpty() ? captureStatus
-                        : ! analyzer.hasHeardSound() ? juce::String ("waiting for sound: press play in your DAW")
-                                                     : "listening...  " + juce::String ((int) (getCaptureProgress() * 100.0f)) + "%";
+        const auto text = captureStatus;
         g.setFont (font (13.5f));
         const float tw = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), text) + 32.0f;
         const auto r = juce::Rectangle<float> (tw, 32.0f).withCentre (bounds.getCentre().translated (0.0f, 30.0f));
         g.setColour (col::box);
         g.fillRoundedRectangle (r, 16.0f);
-        g.setColour (col::accent.withAlpha (0.25f));
-        g.fillRoundedRectangle (r.withWidth (r.getWidth() * getCaptureProgress()), 16.0f);
         g.setColour (col::text);
         g.drawText (text, r, juce::Justification::centred, false);
     }
     else
     {
         struct Key { juce::String t; int style; };
-        const Key keys[] = { { "analysed", 0 }, { "live", 1 }, { "target", 2 } };
+        const Key keys[] = { { "last loop", 0 }, { "live", 1 }, { "target range", 2 } };
         g.setFont (font (11.5f));
         float x = 12.0f;
         const float y = bounds.getBottom() - 40.0f;
         for (auto& k : keys)
         {
-            if (k.style == 0 && ! analyzer.hasResult()) continue;
+            if (k.style == 0 && ! hasSnapshot()) continue;
+            if (k.style == 2 && ! target.valid) continue;
             if (k.style == 0)      { g.setColour (white); g.fillRoundedRectangle (x, y + 5.0f, 14.0f, 2.0f, 1.0f); }
             else if (k.style == 1) { g.setColour (col::liveFill.brighter (0.3f)); g.fillRoundedRectangle (x, y + 1.0f, 14.0f, 10.0f, 2.0f); }
-            else                   { g.setColour (white.withAlpha (0.8f)); g.drawRoundedRectangle (x, y + 1.5f, 14.0f, 9.0f, 2.0f, 1.0f); }
+            else                   { g.setColour (col::good.withAlpha (0.25f)); g.fillRoundedRectangle (x, y + 1.5f, 14.0f, 9.0f, 2.0f);
+                                     g.setColour (col::good.withAlpha (0.7f)); g.drawRoundedRectangle (x, y + 1.5f, 14.0f, 9.0f, 2.0f, 1.0f); }
             g.setColour (col::textDim);
             const float tw = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), k.t);
             g.drawText (k.t, juce::Rectangle<float> (x + 19.0f, y, tw + 4.0f, 12.0f), juce::Justification::centredLeft, false);
@@ -404,12 +429,11 @@ juce::String SpectrumView::getTooltip()
     const auto& z = zones[(size_t) idx];
     juce::String text = z.label + "  (" + formatHz (z.lowHz) + " - " + formatHz (z.highHz) + ")\n\n" + z.tip;
 
-    if (juce::isPositiveAndBelow (idx, (int) marks.size()) && marks[(size_t) idx].text.isNotEmpty())
-        text << "\n\nFix list: " << marks[(size_t) idx].text;
+
     return text;
 }
 
 std::vector<float> SpectrumView::getBandLevels() const
 {
-    return analyzer.thirdOctaveBands();
+    return hasSnapshot() ? snapshot->thirdOctaveBands() : analyzer.thirdOctaveBands();
 }

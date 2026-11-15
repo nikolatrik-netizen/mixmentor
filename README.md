@@ -118,3 +118,18 @@ Rebuild after editing (the file is compiled into the plugin).
 - **Quiet frames are ignored**: silence and tails more than 20 dB below the loudest frame.
 - **ITU BS.1770 loudness** with gating, and 4x oversampled true peak.
 - **Verified:** `train/verify_analysis.py` runs the plugin's analysis code (`train/harness`) on test signals with known answers and against pyloudnorm. Result: 45/45 checks pass at 44.1, 48 and 96 kHz.
+
+
+## v2.0: redesign
+
+**Listening**
+- Listens continuously to your loop (up to 8 bars), or 4 bars at a time.
+- Each beat is compared with the same beat of the previous loop, so your changes show up live, beat by beat.
+
+**Targets**
+- Mix bus: genre curves based on Pestana et al. (AES 2013, 772 commercial songs).
+- Any track: load or drop a reference song or sample and compare against it, level-matched.
+
+**Suggestions**
+- Big scrollable cards: what to do (with settings), a live meter toward the goal, why, and a "Done, check it" box that confirms on the next loop.
+- Clashes with other tracks are shown as well.

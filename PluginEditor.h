@@ -4,6 +4,8 @@
 #include "PluginProcessor.h"
 #include "SpectrumView.h"
 #include "MelodyPanel.h"
+#include "SuggestionPanel.h"
+#include "LiveListener.h"
 #include "Theme.h"
 
 /** Full-window overlay shown on first load: "what are you making today?" */
@@ -72,42 +74,6 @@ private:
     bool guide = false;
 };
 
-/** Right-hand panel: the fix list. "analyse" freezes a list of ranges to cut or boost;
-    "re-check" listens again and marks each one fixed (or tells you it heard no change). */
-class FixPanel : public juce::Component
-{
-public:
-    struct Row
-    {
-        int state = 0;              // same codes as ZoneMark
-        juce::String range;         // "200-400 Hz" or "310 Hz"
-        juce::String chip;          // "cut ~3 dB"
-        juce::String title;         // zone name + status
-        juce::String body;          // what to do / what happened
-    };
-
-    FixPanel();
-    /** mode 0 = nothing analysed yet, 1 = listening, 2 = showing the list. */
-    void setContent (int mode, float progress, std::vector<Row> rows, const juce::String& good,
-                     const juce::String& warning, bool canRecheck);
-    std::function<void()> onAnalyse, onStartOver;
-
-    void paint (juce::Graphics&) override;
-    void resized() override;
-    void mouseDown (const juce::MouseEvent&) override;
-    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
-
-private:
-    juce::TextButton analyseButton { "analyse" }, startOverButton { "start over" };
-    int expandedRow = -1;                 // the open item showing its full text (-1 = the first one)
-    float scroll = 0.0f, maxScroll = 0.0f;
-    std::vector<std::pair<juce::Rectangle<float>, int>> cardHits;
-    int mode = 0;
-    float progress = 0.0f;
-    std::vector<Row> rows;
-    juce::String goodText, warningText;
-};
-
 /** The genre's 30-step workflow as a checklist. Click a step to tick it off. */
 class WorkflowList : public juce::Component
 {
@@ -130,6 +96,7 @@ private:
 };
 
 class MixMentorEditor : public juce::AudioProcessorEditor,
+                        public juce::FileDragAndDropTarget,
                         private juce::Timer
 {
 public:
@@ -139,16 +106,19 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    // Drop a song or sample on the window to use it as the reference
+    bool isInterestedInFileDrag (const juce::StringArray& files) override;
+    void filesDropped (const juce::StringArray& files, int x, int y) override;
+
 private:
     void timerCallback() override;
     void refreshContent();
     void updateGainStatus();
-    void startCapture (int kind);
-    void captureFinished();
-    void buildFixList();
-    void recheckFixList();
-    void refreshFixPanel();
-    bool fixListMatchesSettings() const;
+    void passComplete();
+    void refreshSuggestions();
+    void setReferenceFile (const juce::File&);
+    std::vector<SuggestionPanel::Info> findClashes() const;
+    juce::String listeningStatus() const;
     bool isWorkflowTab() const;
     bool isTheoryTab() const;
     juce::uint32 workflowBits() const;
@@ -164,20 +134,19 @@ private:
     juce::TextEditor tipText;
     WorkflowList workflow;
     juce::Viewport workflowView;
-    FixPanel fixPanel;
-    int captureKind = 0;   // 1 = analyse, 2 = re-check
-    std::vector<MeterFrame> captureFrames;
-    DynamicsReading dynamics;
-    void computeDynamics();
-    void addDynamicsIssues (std::vector<std::pair<float, FixIssue>>& found, juce::StringArray& good);
-    float metricValue (const juce::String& metric) const;
+    SuggestionPanel suggestions;
+    LiveListener listener;
+    bool pendingScan = true;          // look for problems when the next loop is complete
+    juce::TextButton loadRefButton { "load reference..." }, clearRefButton { "use genre" };
+    std::unique_ptr<juce::FileChooser> chooser;
+    int refreshCounter = 0;
     SegmentedControl modeTabs;          // mix | melody
     MelodyPanel melodyPanel { processor.melody, true };
     GenrePicker picker;
     juce::TooltipWindow tooltipWindow { this, 350 };
 
     // Layout rectangles for things painted directly by the editor
-    juce::Rectangle<int> sidebar, topBar, guidePanel, elementsArea, gaugeTextArea;
+    juce::Rectangle<int> sidebar, topBar, guidePanel, elementsArea, gaugeTextArea, compareArea;
     juce::String summaryText, guideTitle, bpmText, genreName;
     juce::StringArray elements;
 
@@ -185,8 +154,8 @@ private:
     int shownGenre = -2, shownInstrument = -2;
 
     std::vector<float> readLeft = std::vector<float> (1 << 15), readRight = std::vector<float> (1 << 15);
-    int lastDropped = 0, lastRestarts = 0;
-    void updateCaptureStatus();
+    int lastDropped = 0;
+    double listenerRate = 0.0;
     float peakDisplayDb = -100.0f, holdDb = -100.0f;
     int holdFrames = 0, frameCounter = 0;
 

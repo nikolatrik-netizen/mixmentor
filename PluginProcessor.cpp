@@ -38,7 +38,6 @@ void MixMentorProcessor::prepareToPlay (double sampleRate, int)
     trimGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (trimDb->load()));
     melody.prepare (sampleRate);
 
-    meter.prepare (sampleRate);
     melodyMidi.ensureSize (2048);
 }
 
@@ -102,128 +101,55 @@ void MixMentorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
         displayFifo.finishedWrite (n1 + n2);
     }
 
-    // Analysis capture, synced to the song position: only the samples inside the chosen bars go to
-    // the analyzer and the loudness meter, so analyse and re-check hear exactly the same music.
-    int from = 0, to = 0;
-    const int state = captureState.load();
-    juce::Optional<juce::AudioPlayHead::PositionInfo> pos;
-    if (auto* ph = getPlayHead()) pos = ph->getPosition();
-    const bool playing = pos.hasValue() && pos->getIsPlaying();
-    const auto ppqOpt = pos.hasValue() ? pos->getPpqPosition() : juce::Optional<double>();
-    const auto bpmOpt = pos.hasValue() ? pos->getBpm() : juce::Optional<double>();
-    const bool musical = playing && ppqOpt.hasValue() && bpmOpt.hasValue() && *bpmOpt > 1.0;
-    hostPlaying.store (playing);
-    if (musical) hostPosition.store (true);
-    if (pos.hasValue())
-        if (auto sig = pos->getTimeSignature(); sig.hasValue() && sig->denominator > 0)
-            barLengthPpq.store (4.0 * sig->numerator / sig->denominator);
-
-    if (state == captureWaiting || state == captureRunning)
+    // Stream to the editor's listener: the samples, then the block's song position.
+    if (listening.load())
     {
-        if (! hostPosition.load())
+        BlockInfo info;
+        if (auto* ph = getPlayHead())
+            if (auto pos = ph->getPosition(); pos.hasValue())
+            {
+                const auto ppq = pos->getPpqPosition();
+                const auto bpm = pos->getBpm();
+                if (ppq.hasValue() && bpm.hasValue() && *bpm > 1.0)
+                {
+                    info.hasPosition = true;
+                    info.playing = pos->getIsPlaying();
+                    info.ppq = *ppq;
+                    info.bpm = *bpm;
+                    info.looping = pos->getIsLooping();
+                    if (auto loop = pos->getLoopPoints(); loop.hasValue())
+                    { info.loopStart = loop->ppqStart; info.loopEnd = loop->ppqEnd; }
+                    if (auto sig = pos->getTimeSignature(); sig.hasValue() && sig->denominator > 0)
+                        info.barLength = 4.0 * sig->numerator / sig->denominator;
+                }
+            }
+
+        if (fifo.getFreeSpace() >= numSamples && blockFifo.getFreeSpace() >= 1)
         {
-            // No song position from the host (e.g. the standalone app): capture continuously,
-            // the analyzer stops after a fixed time.
-            from = 0; to = numSamples;
-            captureState.store (captureRunning);
+            int start1, size1, start2, size2;
+            fifo.prepareToWrite (numSamples, start1, size1, start2, size2);
+            std::copy_n (L, size1, fifoLeft.data() + start1);
+            std::copy_n (R, size1, fifoRight.data() + start1);
+            if (size2 > 0)
+            {
+                std::copy_n (L + size1, size2, fifoLeft.data() + start2);
+                std::copy_n (R + size1, size2, fifoRight.data() + start2);
+            }
+            fifo.finishedWrite (size1 + size2);
+            int b1, m1, b2, m2;
+            blockFifo.prepareToWrite (1, b1, m1, b2, m2);
+            blockInfos[(size_t) b1] = { numSamples, info };
+            blockFifo.finishedWrite (1);
         }
-        else if (musical)
+        else
         {
-            const double ppq = *ppqOpt;
-            const double samplesPerBeat = getSampleRate() * 60.0 / *bpmOpt;
-            const double blockEndPpq = ppq + numSamples / samplesPerBeat;
-            const double bar = barLengthPpq.load();
-
-            if (captureStartPpq.load() < 0.0)
-            {
-                // Pick the bars: the host's loop (up to 8 bars of it), otherwise the next 4 bars.
-                double start, end;
-                const auto loop = pos->getLoopPoints();
-                if (pos->getIsLooping() && loop.hasValue() && loop->ppqEnd - loop->ppqStart >= bar * 0.99)
-                {
-                    start = loop->ppqStart;
-                    end = juce::jmin (loop->ppqEnd, start + 8.0 * bar);
-                }
-                else
-                {
-                    const double lastBar = pos->getPpqPositionOfLastBarStart().orFallback (std::floor (ppq / bar) * bar);
-                    start = lastBar + bar;
-                    end = start + 4.0 * bar;
-                }
-                captureStartPpq.store (start);
-                captureEndPpq.store (end);
-            }
-
-            const double start = captureStartPpq.load(), end = captureEndPpq.load();
-
-            // Playback jumped away in the middle of the bars: start this capture over.
-            if (state == captureRunning && (ppq < start - 1.0e-6 || ppq > end + 0.01))
-            {
-                captureState.store (captureWaiting);
-                captureRestarts.fetch_add (1);
-            }
-            else if (state == captureWaiting && ppq > start + juce::jmax (0.0625, 1.5 * numSamples / samplesPerBeat))
-            {
-                // Already past the first bar: wait until the song comes back to it (next loop pass),
-                // so the capture always covers the whole bars from their first beat.
-            }
-            else
-            {
-                if (state == captureWaiting) meter.startNewCapture();
-                from = juce::jlimit (0, numSamples, (int) std::ceil ((start - ppq) * samplesPerBeat));
-                to   = juce::jlimit (0, numSamples, (int) std::ceil ((end - ppq) * samplesPerBeat));
-                if (to > from)
-                {
-                    if (state == captureWaiting) captureState.store (captureRunning);
-                    captureProgress.store ((float) juce::jlimit (0.0, 1.0, (blockEndPpq - start) / (end - start)));
-                }
-                if (captureState.load() == captureRunning && blockEndPpq >= end - 1.0e-6)
-                {
-                    pushCapture (L + from, R + from, to - from);
-                    from = to = 0;
-                    captureProgress.store (1.0f);
-                    captureState.store (captureDone);
-                }
-            }
+            droppedBlocks.fetch_add (1);   // the editor isn't reading fast enough
         }
-        // stopped: wait
     }
 
-    if (to > from)
-        pushCapture (L + from, R + from, to - from);
     // Melody tab preview: added after the analysis, so it never affects the mix advice.
     melodyMidi.clear();
     melody.process (buffer, melodyMidi, getPlayHead());
-}
-
-void MixMentorProcessor::pushCapture (const float* L, const float* R, int n)
-{
-    if (n <= 0) return;
-    if (fifo.getFreeSpace() >= n)
-    {
-        int start1, size1, start2, size2;
-        fifo.prepareToWrite (n, start1, size1, start2, size2);
-        std::copy_n (L, size1, fifoLeft.data() + start1);
-        std::copy_n (R, size1, fifoRight.data() + start1);
-        if (size2 > 0)
-        {
-            std::copy_n (L + size1, size2, fifoLeft.data() + start2);
-            std::copy_n (R + size1, size2, fifoRight.data() + start2);
-        }
-        fifo.finishedWrite (size1 + size2);
-    }
-    else
-    {
-        droppedBlocks.fetch_add (1);   // the GUI isn't reading (window closed or frozen)
-    }
-
-    // Loudness / true peak / stereo meter frames for the same samples
-    meter.process (L, R, n, [this] (const MeterFrame& f)
-    {
-        int s1, n1, s2, n2;
-        meterFifo.prepareToWrite (1, s1, n1, s2, n2);
-        if (n1 > 0) { meterBuffer[(size_t) s1] = f; meterFifo.finishedWrite (1); }
-    });
 }
 
 int MixMentorProcessor::readDisplaySamples (float* dest, int maxSamples)
@@ -236,14 +162,21 @@ int MixMentorProcessor::readDisplaySamples (float* dest, int maxSamples)
     return n1 + n2;
 }
 
-int MixMentorProcessor::readAnalysisSamples (float* left, float* right, int maxSamples)
+int MixMentorProcessor::readStreamBlock (float* left, float* right, int maxSamples, BlockInfo& info)
 {
+    if (blockFifo.getNumReady() < 1) return 0;
+    int b1, m1, b2, m2;
+    blockFifo.prepareToRead (1, b1, m1, b2, m2);
+    const auto block = blockInfos[(size_t) b1];
+    blockFifo.finishedRead (1);
+    info = block.info;
+    const int n = juce::jmin (block.numSamples, maxSamples, fifo.getNumReady());
     int start1, size1, start2, size2;
-    fifo.prepareToRead (juce::jmin (maxSamples, fifo.getNumReady()), start1, size1, start2, size2);
-    if (size1 > 0) { std::copy_n (fifoLeft.data() + start1, size1, left);  std::copy_n (fifoRight.data() + start1, size1, right); }
-    if (size2 > 0) { std::copy_n (fifoLeft.data() + start2, size2, left + size1); std::copy_n (fifoRight.data() + start2, size2, right + size1); }
+    fifo.prepareToRead (block.numSamples, start1, size1, start2, size2);
+    if (size1 > 0) { std::copy_n (fifoLeft.data() + start1, juce::jmin (size1, n), left);  std::copy_n (fifoRight.data() + start1, juce::jmin (size1, n), right); }
+    if (size2 > 0 && n > size1) { std::copy_n (fifoLeft.data() + start2, n - size1, left + size1); std::copy_n (fifoRight.data() + start2, n - size1, right + size1); }
     fifo.finishedRead (size1 + size2);
-    return size1 + size2;
+    return n;
 }
 
 void MixMentorProcessor::updateTrackProperties (const TrackProperties& properties)
@@ -285,41 +218,7 @@ void MixMentorProcessor::getStateInformation (juce::MemoryBlock& destData)
     if (auto paramsXml = parameters.copyState().createXml())
         xml.addChildElement (paramsXml.release());
 
-    if (fixSession.valid)
-    {
-        auto* fx = xml.createNewChildElement ("FixSession");
-        fx->setAttribute ("genre", fixSession.genreId);
-        fx->setAttribute ("instrument", fixSession.instrumentId);
-        fx->setAttribute ("good", fixSession.goodZones.joinIntoString ("|"));
-        fx->setAttribute ("checks", fixSession.checks);
-        fx->setAttribute ("startPpq", fixSession.startPpq);
-        fx->setAttribute ("endPpq", fixSession.endPpq);
-        {
-            juce::StringArray b;
-            for (float v : fixSession.baseBands) b.add (juce::String (v, 2));
-            fx->setAttribute ("bands", b.joinIntoString (" "));
-        }
-        for (auto& is : fixSession.issues)
-        {
-            auto* e = fx->createNewChildElement ("Issue");
-            e->setAttribute ("zone", is.zone);
-            e->setAttribute ("label", is.label);
-            e->setAttribute ("lo", is.lowHz);
-            e->setAttribute ("hi", is.highHz);
-            e->setAttribute ("focus", is.focusHz);
-            e->setAttribute ("action", is.action);
-            e->setAttribute ("res", is.resonance);
-            e->setAttribute ("bump", is.bump);
-            e->setAttribute ("amount", is.amount);
-            e->setAttribute ("baseline", is.baseline);
-            e->setAttribute ("baseLvl", is.baselineLevel);
-            e->setAttribute ("metric", is.metric);
-            e->setAttribute ("limit", is.limit);
-            e->setAttribute ("fixedVal", is.fixedValue);
-            e->setAttribute ("change", is.latestChange);
-            e->setAttribute ("status", is.status);
-        }
-    }
+    xml.setAttribute ("advisor", advisor.toXmlString());
 
     melody.writeState (*xml.createNewChildElement ("Melody"));
 
@@ -348,41 +247,7 @@ void MixMentorProcessor::setStateInformation (const void* data, int sizeInBytes)
         if (auto* m = xml->getChildByName ("Melody"))
             melody.readState (*m);
 
-        fixSession = {};
-        if (auto* fx = xml->getChildByName ("FixSession"))
-        {
-            fixSession.valid = true;
-            fixSession.genreId = fx->getStringAttribute ("genre");
-            fixSession.instrumentId = fx->getStringAttribute ("instrument");
-            fixSession.goodZones = juce::StringArray::fromTokens (fx->getStringAttribute ("good"), "|", "");
-            fixSession.checks = fx->getIntAttribute ("checks");
-            fixSession.startPpq = fx->getDoubleAttribute ("startPpq", -1.0);
-            fixSession.endPpq = fx->getDoubleAttribute ("endPpq", -1.0);
-            fixSession.baseBands.clear();
-            for (auto& t : juce::StringArray::fromTokens (fx->getStringAttribute ("bands"), " ", ""))
-                if (t.isNotEmpty()) fixSession.baseBands.push_back (t.getFloatValue());
-            for (auto* e : fx->getChildWithTagNameIterator ("Issue"))
-            {
-                FixIssue is;
-                is.zone = e->getIntAttribute ("zone");
-                is.label = e->getStringAttribute ("label");
-                is.lowHz = (float) e->getDoubleAttribute ("lo");
-                is.highHz = (float) e->getDoubleAttribute ("hi");
-                is.focusHz = (float) e->getDoubleAttribute ("focus");
-                is.action = e->getIntAttribute ("action", 1);
-                is.resonance = e->getBoolAttribute ("res");
-                is.bump = e->getBoolAttribute ("bump");
-                is.amount = (float) e->getDoubleAttribute ("amount", 3.0);
-                is.baseline = (float) e->getDoubleAttribute ("baseline");
-                is.baselineLevel = (float) e->getDoubleAttribute ("baseLvl");
-                is.metric = e->getStringAttribute ("metric");
-                is.limit = (float) e->getDoubleAttribute ("limit");
-                is.fixedValue = (float) e->getDoubleAttribute ("fixedVal");
-                is.latestChange = (float) e->getDoubleAttribute ("change");
-                is.status = e->getIntAttribute ("status");
-                fixSession.issues.push_back (is);
-            }
-        }
+        advisor.fromXmlString (xml->getStringAttribute ("advisor"));
 
         workflowProgress.clear();
         for (auto* w : xml->getChildWithTagNameIterator ("Workflow"))
@@ -405,12 +270,3 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
     return new MixMentorProcessor();
 }
 
-int MixMentorProcessor::readMeterFrames (MeterFrame* dest, int maxFrames)
-{
-    int s1, n1, s2, n2;
-    meterFifo.prepareToRead (maxFrames, s1, n1, s2, n2);
-    for (int i = 0; i < n1; ++i) dest[i] = meterBuffer[(size_t) (s1 + i)];
-    for (int i = 0; i < n2; ++i) dest[n1 + i] = meterBuffer[(size_t) (s2 + i)];
-    meterFifo.finishedRead (n1 + n2);
-    return n1 + n2;
-}
