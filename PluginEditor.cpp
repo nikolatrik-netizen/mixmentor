@@ -528,12 +528,21 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
     clearRefButton.onClick = [this] { processor.advisor.setReference ({}); pendingScan = true; refreshSuggestions(); repaint(); };
     addAndMakeVisible (clearRefButton);
 
+    // The tips page: one tab per process (eq, compression, ...). Workflow and theory get their own pages.
     juce::StringArray processNames;
-    for (auto& proc : kb.processes())
+    for (size_t k = 0; k < kb.processes().size(); ++k)
+    {
+        const auto& proc = kb.processes()[k];
+        if (proc.id == "workflow") { workflowProcess = (int) k; continue; }
+        if (proc.id == "theory")   { theoryProcess = (int) k; continue; }
         processNames.add (proc.name);
+        tipProcesses.push_back ((int) k);
+    }
     processTabs.setOptions (processNames);
-    processTabs.onChange = [this] (int index) { currentProcess = index; refreshContent(); };
-    addAndMakeVisible (processTabs);
+    processTabs.onChange = [this] (int index) { currentProcess = tipProcesses[(size_t) index]; lastTipProcess = currentProcess; refreshContent(); };
+    addChildComponent (processTabs);
+    addAndMakeVisible (bandNumbers);
+    suggestions.onSelect = [this] (const juce::String&) { refreshSuggestions(); };
 
     tipText.setMultiLine (true, true);
     tipText.setReadOnly (true);
@@ -561,13 +570,9 @@ MixMentorEditor::MixMentorEditor (MixMentorProcessor& p)
     workflowView.setScrollBarThickness (8);
     addChildComponent (workflowView);
 
-    modeTabs.setOptions ({ "mix", "melody" });
+    modeTabs.setOptions ({ "mix", "tips", "workflow", "theory", "melody" });
     modeTabs.setSelected (0);
-    modeTabs.onChange = [this] (int index)
-    {
-        melodyPanel.setVisible (index == 1);
-        if (index != 1) processor.melody.setPreviewPlaying (false);
-    };
+    modeTabs.onChange = [this] (int index) { setPage (index); };
     addAndMakeVisible (modeTabs);
     addChildComponent (melodyPanel);
 
@@ -594,6 +599,24 @@ MixMentorEditor::~MixMentorEditor()
     processor.listening = false;
     processor.melody.setPreviewPlaying (false);
     setLookAndFeel (nullptr);
+}
+
+void MixMentorEditor::setPage (int index)
+{
+    page = index;
+    if (page == pageTips)          currentProcess = lastTipProcess;
+    else if (page == pageWorkflow) currentProcess = workflowProcess;
+    else if (page == pageTheory)   currentProcess = theoryProcess;
+    const bool mix = page == pageMix;
+    spectrum.setVisible (mix);
+    bandNumbers.setVisible (mix);
+    suggestions.setVisible (mix);
+    processTabs.setVisible (page == pageTips);
+    melodyPanel.setVisible (page == pageMelody);
+    if (page != pageMelody) processor.melody.setPreviewPlaying (false);
+    refreshContent();
+    resized();
+    repaint();
 }
 
 bool MixMentorEditor::isWorkflowTab() const
@@ -638,7 +661,7 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.fillEllipse (s.getX() + 64.0f + wordW + 5.0f, 44.0f, 6.0f, 6.0f);
     g.setColour (col::textFaint);
     g.setFont (font (11.0f));
-    g.drawText ("learn while you mix   v2.0", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
+    g.drawText ("learn while you mix   v2.1", s.withTrimmedLeft (65.0f).withY (56.0f).withHeight (16.0f), juce::Justification::centredLeft, false);
 
     g.setColour (col::border.withAlpha (0.6f));
     g.fillRect (s.getX(), 94.0f, s.getWidth(), 1.0f);
@@ -702,9 +725,11 @@ void MixMentorEditor::paint (juce::Graphics& g)
     g.setColour (col::textDim);
     g.setFont (font (13.0f));
     g.drawText ((bpmText.isNotEmpty() ? bpmText.toLowerCase() + "   |   " : juce::String()) + summaryText.toLowerCase(),
-                tb.withTrimmedRight (240.0f), juce::Justification::centredLeft, true);
+                tb.withTrimmedRight (460.0f), juce::Justification::centredLeft, true);
 
-    // Guide panel
+    // Guide panel (tips / workflow / theory pages)
+    if (page != pageTips && page != pageWorkflow && page != pageTheory)
+        return;
     drawPanel (g, guidePanel.toFloat());
     auto gp = guidePanel.toFloat().reduced (18.0f, 14.0f);
     auto header = gp.removeFromTop (18.0f);
@@ -759,19 +784,26 @@ void MixMentorEditor::resized()
         auto tb = topBar.reduced (8, 5);
         guideButton.setBounds (tb.removeFromRight (30));
         tb.removeFromRight (10);
-        modeTabs.setBounds (tb.removeFromRight (180));
+        modeTabs.setBounds (tb.removeFromRight (400));
     }
     melodyPanel.setBounds (area);
 
-    // Upper part: analyzer on the left, the suggestions (the main thing) on the right
-    auto upper = area.removeFromTop ((int) (area.getHeight() * 0.63f));
-    const int panelW = juce::jmax (540, (int) (upper.getWidth() * 0.52f));
-    suggestions.setBounds (upper.removeFromRight (panelW).reduced (10, 10).withTrimmedLeft (0));
-    spectrum.setBounds (upper);
+    // Mix page: the curve with its numbers on the left, what to do (with in-depth advice) on the right
+    {
+        auto mix = area;
+        const int panelW = juce::jlimit (480, 620, (int) (mix.getWidth() * 0.42f));
+        suggestions.setBounds (mix.removeFromRight (panelW).reduced (10, 10).withTrimmedLeft (0));
+        bandNumbers.setBounds (mix.removeFromBottom (104).reduced (4, 0).withTrimmedBottom (6));
+        spectrum.setBounds (mix);
+    }
 
+    // Tips / workflow / theory pages: the guide fills the page
     area = area.reduced (16, 12);
-    processTabs.setBounds (area.removeFromTop (36));
-    area.removeFromTop (12);
+    if (page == pageTips)
+    {
+        processTabs.setBounds (area.removeFromTop (36));
+        area.removeFromTop (12);
+    }
     guidePanel = area;
 
     auto content = guidePanel.reduced (18, 14).withTrimmedTop (18 + 8 + 24 + 10);
@@ -794,7 +826,8 @@ void MixMentorEditor::refreshContent()
     picker.setVisible (g < 0);
     genreBox.setSelectedId (g + 1, juce::dontSendNotification);
     instrumentBox.setSelectedId (i + 1, juce::dontSendNotification);
-    processTabs.setSelected (currentProcess);
+    for (size_t k = 0; k < tipProcesses.size(); ++k)
+        if (tipProcesses[k] == lastTipProcess) processTabs.setSelected ((int) k);
 
     const bool validGenre = juce::isPositiveAndBelow (g, (int) kb.genres().size());
     if (validGenre)
@@ -807,8 +840,9 @@ void MixMentorEditor::refreshContent()
     }
 
     const bool wf = isWorkflowTab();
-    tipText.setVisible (! wf);
-    workflowView.setVisible (wf);
+    const bool guidePage = page == pageTips || page == pageWorkflow || page == pageTheory;
+    tipText.setVisible (guidePage && ! wf);
+    workflowView.setVisible (guidePage && wf);
 
     if (validGenre)
         melodyPanel.setGenre (kb.genres()[(size_t) g].id);
@@ -999,8 +1033,13 @@ void MixMentorEditor::refreshSuggestions()
     for (auto& a : adv.items)
         if (a.status == Advice::open && a.kind != Advice::kMetric)
             hl.push_back ({ a.lowHz, a.highHz, a.direction > 0 ? col::bad : col::warn, a.title });
+    // highlight the selected issue strongest
+    for (auto& h : hl)
+        for (auto& a : adv.items)
+            if (a.id == suggestions.getSelected() && a.title == h.label) h.colour = col::accent;
     spectrum.setHighlights (hl);
     spectrum.setTarget (adv.activeTarget());
+    bandNumbers.setReadings (adv.regionReadings (listener), adv.activeTarget().valid, adv.activeTarget().name);
 
     juce::String empty;
     if (adv.scans == 0)
@@ -1042,7 +1081,7 @@ bool MixMentorEditor::isInterestedInFileDrag (const juce::StringArray& files)
 
 void MixMentorEditor::filesDropped (const juce::StringArray& files, int, int)
 {
-    if (! files.isEmpty() && modeTabs.getSelected() == 0)
+    if (! files.isEmpty() && page == pageMix)
         setReferenceFile (juce::File (files[0]));
 }
 

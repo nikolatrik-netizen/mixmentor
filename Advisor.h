@@ -18,6 +18,8 @@ struct Advice
     juce::String title;               // "Low-mids too loud"
     juce::String action;              // "EQ: cut 4 dB at 280 Hz, Q 1.2"
     juce::String why;                 // plain-language explanation
+    juce::StringArray steps;          // in-depth: how to do it, step by step
+    juce::String listenFor, caution;  // in-depth: what you should hear, what to watch out for
     juce::String unit = "dB";
     float lowHz = 0, highHz = 0, focusHz = 0;
     juce::String metric;              // for kind == kMetric: crestHi, swing, lowwidth, ...
@@ -83,6 +85,11 @@ public:
 
     int openCount() const;
 
+    /** The numbers under the curve: each frequency region against the target (or, without a target,
+        against the rest of the track), from the last loop plus the live change in the current one. */
+    struct RegionReading { juce::String name; float lowHz, highHz, value, tolerance; bool vsTarget; int issue = 0; };
+    std::vector<RegionReading> regionReadings (const LiveListener& listener) const;
+
     juce::String toXmlString() const;
     void fromXmlString (const juce::String&);
 
@@ -95,4 +102,5 @@ private:
     void addZoneIssues (const LiveListener::Pass& pass, const mm::Guide& guide, std::vector<Advice>& found);
     void addDynamicsIssues (const DynamicsReading& d, std::vector<Advice>& found);
     void describeRange (Advice& a, float excess, float tol) const;
+    void addDetails (Advice& a) const;
 };

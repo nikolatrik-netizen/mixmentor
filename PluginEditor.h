@@ -135,6 +135,12 @@ private:
     WorkflowList workflow;
     juce::Viewport workflowView;
     SuggestionPanel suggestions;
+    BandNumbers bandNumbers;
+    enum Page { pageMix = 0, pageTips, pageWorkflow, pageTheory, pageMelody };
+    int page = pageMix;
+    void setPage (int index);
+    std::vector<int> tipProcesses;
+    int workflowProcess = -1, theoryProcess = -1, lastTipProcess = 0;
     LiveListener listener;
     bool pendingScan = true;          // look for problems when the next loop is complete
     juce::TextButton loadRefButton { "load reference..." }, clearRefButton { "use genre" };
